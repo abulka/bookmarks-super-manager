@@ -1,0 +1,33 @@
+{
+  "name": "bookmark-super-manager",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.35.0",
+    "idb-keyval": "^6.3.0",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.42"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.5.0",
+    "@vue/tsconfig": "^0.9.1",
+    "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^20.11.15",
+    "jsdom": "^30.0.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vite-node": "^6.0.0",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.3.11"
+  }
+}
