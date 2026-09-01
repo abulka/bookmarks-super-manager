@@ -21,6 +21,37 @@ hosted as a plain static site (e.g. Netlify).
 - Tabs — open, merge, and switch between several bookmark files
 - Undo across reorganisation actions
 
+## Search
+
+Press **⌘F** (or **Ctrl+F**) and type in the omnibox to search names, URLs and
+folder names. Results are grouped by their location in the tree.
+
+Smart term matching applies to every search box (the search view, the sidebar
+"Filter tree", and the folder picker):
+
+- **Space-separated terms match everything** — `pi code` finds bookmarks that
+  contain *both* `pi` and `code`:
+  ```
+  git commit          → matches items containing "git" AND "commit"
+  ```
+- **Terms match the visible title as a substring** — `pi` matches `Pi`,
+  `pixels`, `Happily`, etc. (anywhere in the name). Names are matched only; a
+  short term buried inside a long URL won't produce scan-noise:
+  ```
+  wik                 → matches "Wikipedia"
+  ```
+- **Quoted terms are exact whole words** — wrap a term in double quotes to match
+  only that word on its own (not `pixels`, `pick`, `pinterest`). Whole-word
+  terms also look in the URL:
+  ```
+  "pi"                → matches the word "pi" only
+  pi "code"           → "pi" as a substring of the name, "code" as a whole word
+  ```
+
+So `git "branch"` finds an item whose name contains `git` (anywhere) and that
+somewhere contains the whole word `branch` (name or URL).
+
+
 ## Quick start
 
 ```bash

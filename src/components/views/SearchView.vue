@@ -95,11 +95,13 @@ function copyPath(n: BmNode): void {
   <div v-if="doc" class="search-view" :data-ver="docs.treeVersion">
     <div class="search-bar">
       <div class="sb-query">
-        <component :is="icon('Search')" :size="16" />
+        <span class="sq-label">Search Results For:</span>
         <span class="sq-text truncate" :title="q">{{ q }}</span>
       </div>
       <span class="sb-count">{{ results.length }} result{{ results.length === 1 ? '' : 's' }}</span>
-      <button class="btn sm" @click="docs.setView(doc.id, 'manager')">Manager</button>
+      <button class="icon-btn" title="Close search" @click="docs.setView(doc.id, 'manager')">
+        <component :is="icon('X')" :size="15" />
+      </button>
     </div>
 
     <div v-if="q" class="search-results">
@@ -158,10 +160,19 @@ function copyPath(n: BmNode): void {
 .sb-query {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   min-width: 0;
   color: var(--text-3);
+}
+.sq-label {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-3);
+  white-space: nowrap;
 }
 .sq-text {
   flex: 1;

@@ -52,13 +52,24 @@ export function tokenMatches(token: Token, text: string): boolean {
 }
 
 /**
- * Every token must match at least one of the given texts (e.g. the item's
- * name and/or URL). "pi code" matches an item that contains "pi" AND "code"
- * (each as a substring by default, or as a whole word when quoted).
+ * Every token must match. Unquoted (substring) tokens match only against the
+ * item's `name` — URLs aren't scanned by substrings because a short term like
+ * "pi" would otherwise hit any long URL that happens to contain it (api/,
+ * optimize, …). Quoted (whole-word) tokens match a whole word in the `name` or
+ * the `url`. "pi code" thus matches an item whose NAME contains "pi" AND "code";
+ * `"pi" code` matches an item with the whole word "pi" (name or URL) and "code"
+ * in its name.
  */
-export function matchQuery(tokens: Token[], ...texts: string[]): boolean {
+export function matchQuery(tokens: Token[], name: string, url?: string): boolean {
   if (!tokens.length) return false
-  return tokens.every((t) => texts.some((s) => tokenMatches(t, s)))
+  for (const t of tokens) {
+    if (t.whole) {
+      if (!tokenMatches(t, name) && !(url && tokenMatches(t, url))) return false
+    } else if (!tokenMatches(t, name)) {
+      return false
+    }
+  }
+  return true
 }
 
 /** 0-based [start, end) of the first occurrence of `token` in `text`, or null. */

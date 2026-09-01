@@ -66,11 +66,13 @@ describe('SearchView', () => {
     await w.vm.$nextTick()
 
     const rows = w.findAll('.search-row')
-    // folder hit + the link it contains + the webmidijs-play link
-    expect(rows.length).toBe(3)
+    // folder hit + the webmidijs-play link (whose NAME contains "webmidijs").
+    // The "Note | WEBMIDI.js" link matches only via its URL (webmidijs.org), so
+    // it is correctly excluded — substrings are matched against names only.
+    expect(rows.length).toBe(2)
     const types = rows.map((r) => (r.find('.sr-folder').exists() ? 'folder' : 'link'))
     expect(types).toContain('folder')
-    expect(w.find('.sb-count').text()).toBe('3 results')
+    expect(w.find('.sb-count').text()).toBe('2 results')
     w.unmount()
   })
 
@@ -146,7 +148,7 @@ describe('smart search', () => {
     expect(tokenMatches({ text: 'pi', whole: true }, 'Happily tools')).toBe(false)
   })
 
-  it('plain "pi" matches substrings (mid-word included)', async () => {
+  it('plain "pi" matches substrings in the NAME (not URLs)', async () => {
     const docs = useDocs()
     const id = mkDoc()
     docs.byId(id)!.searchQuery = 'pi'
@@ -158,11 +160,11 @@ describe('smart search', () => {
     expect(names).toContain('Pi stuff')
     expect(names).toContain('Happily tools') // "pi" is mid-word in "Happily"
     expect(names).toContain('Pi Camera — codesandbox')
-    expect(names).toContain('Raspberry Notes') // via its url ".../raspberry-pi"
+    expect(names).not.toContain('Raspberry Notes') // "pi" is only in its URL, not its name
     w.unmount()
   })
 
-  it('quoted "pi" restricts to whole words', async () => {
+  it('quoted "pi" matches a whole word in the name OR the url', async () => {
     const docs = useDocs()
     const id = mkDoc()
     docs.byId(id)!.searchQuery = '"pi"'
@@ -173,7 +175,7 @@ describe('smart search', () => {
     const names = w.findAll('.search-row').map((r) => r.find('.sr-name').text())
     expect(names).toContain('Pi stuff')
     expect(names).toContain('Pi Camera — codesandbox')
-    expect(names).toContain('Raspberry Notes') // whole word at the end of the url "…/pi"
+    expect(names).toContain('Raspberry Notes') // whole word "pi" at the end of its URL
     expect(names).not.toContain('Happily tools') // only mid-word "pi"
 
     // the whole-word "pi" is what gets highlighted, not an offset fragment
@@ -182,7 +184,7 @@ describe('smart search', () => {
     w.unmount()
   })
 
-  it('"pi code" requires both terms (each matched as a substring)', async () => {
+  it('"pi code" requires both terms in the NAME', async () => {
     const docs = useDocs()
     const id = mkDoc()
     docs.byId(id)!.searchQuery = 'pi code'
@@ -192,16 +194,19 @@ describe('smart search', () => {
 
     const names = w.findAll('.search-row').map((r) => r.find('.sr-name').text())
     expect(names).toContain('Pi Camera — codesandbox') // name has "pi" + "code"
-    expect(names).toContain('Raspberry Notes') // url has "pi" (raspberry-pi) + "code" (bitcode)
-    expect(names).not.toContain('Pi stuff') // no "code"
-    expect(names).not.toContain('Happily tools') // no "code"
+    expect(names).not.toContain('Pi stuff') // no "code" in name
+    expect(names).not.toContain('Happily tools') // no "code" in name
+    expect(names).not.toContain('Raspberry Notes') // neither term is in its name
     w.unmount()
   })
 
-  it('unit: every whitespace token must match at least one field, in any field', () => {
-    const tokens = tokenizeQuery('pi code')
-    expect(matchQuery(tokens, 'Pi Camera', 'https://x/code/')).toBe(true) // pi in name, code in url
-    expect(matchQuery(tokens, 'Pi Camera')).toBe(false) // only pi
-    expect(matchQuery(tokens, '', 'https://example.com/code/pi')).toBe(true) // both in url
+  it('unit: substring tokens match the name only; quoted tokens match name or url as a whole word', () => {
+    // unquoted terms are substrings, matched against the NAME only
+    expect(matchQuery(tokenizeQuery('pi cod'), 'Pixels', 'https://example.com/code')).toBe(false) // "cod" in url doesn't count
+    expect(matchQuery(tokenizeQuery('pi cod'), 'Pi coding')).toBe(true) // both in the name
+    // quoted terms match a whole word in the name or the url
+    expect(matchQuery(tokenizeQuery('"pi"'), 'Raspberry Notes', 'https://example.com/raspberry-pi')).toBe(true) // whole word in url
+    expect(matchQuery(tokenizeQuery('"pi"'), 'Raspberry Notes')).toBe(false) // no whole word in name
+    expect(matchQuery(tokenizeQuery('"pi"'), 'Happily tools')).toBe(false) // only mid-word
   })
 })
