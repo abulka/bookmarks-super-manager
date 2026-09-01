@@ -5,6 +5,7 @@ import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
 import { hostOf } from '../../lib/url'
 import { namePath } from '../../lib/tree'
+import { findToken, matchQuery, tokenizeQuery, type Token } from '../../lib/search'
 import type { BmNode } from '../../types'
 import Favicon from '../shared/Favicon.vue'
 
@@ -23,28 +24,21 @@ interface Hit {
 const results = computed<Hit[]>(() => {
   docs.treeVersion
   const d = doc.value
-  const query = q.value.trim().toLowerCase()
-  if (!d || !query) return []
+  const tokens = tokenizeQuery(q.value)
+  if (!d || !tokens.length) return []
   const out: Hit[] = []
-  // top-level chrome folders ("Bookmarks bar", "Other bookmarks", …) are searchable too
-  for (const c of d.root.children) {
-    if (c.type === 'folder' && c.name.toLowerCase().includes(query)) out.push({ node: c, folderNames: [] })
-  }
   const stk: { n: BmNode; names: string[] }[] = d.root.children.map((c) => ({ n: c, names: [c.name] }))
   while (stk.length) {
     const { n, names } = stk.pop()!
     // the folder path shown next to a hit drops the top-level chrome folder
     const inFolder = names.length > 1 ? names.slice(1) : names
-    for (const c of n.children) {
-      const nm = [...names, c.name]
-      if (c.type === 'folder') {
-        // folders themselves are searchable — the query may target a folder name
-        if (c.name.toLowerCase().includes(query)) out.push({ node: c, folderNames: inFolder })
-        stk.push({ n: c, names: nm })
-      } else if (c.name.toLowerCase().includes(query) || (c.url || '').toLowerCase().includes(query)) {
-        out.push({ node: c, folderNames: inFolder })
-      }
+    if (n.type === 'folder') {
+      // folders themselves are searchable — the query may target a folder name
+      if (matchQuery(tokens, n.name)) out.push({ node: n, folderNames: inFolder })
+    } else if (matchQuery(tokens, n.name, n.url || '')) {
+      out.push({ node: n, folderNames: inFolder })
     }
+    for (const c of n.children) stk.push({ n: c, names: [...names, c.name] })
   }
   return out.slice(0, 500)
 })
@@ -60,11 +54,23 @@ const grouped = computed(() => {
   return [...map.entries()]
 })
 
-function hl(name: string, q: string): string {
-  if (!q) return escapeHtml(name)
-  const i = name.toLowerCase().indexOf(q)
-  if (i < 0) return escapeHtml(name)
-  return escapeHtml(name.slice(0, i)) + '<mark>' + escapeHtml(name.slice(i, i + q.length)) + '</mark>' + escapeHtml(name.slice(i + q.length))
+function hl(name: string, tokens: Token[]): string {
+  if (!tokens.length) return escapeHtml(name)
+  const ranges: [number, number][] = []
+  for (const t of tokens) {
+    const r = findToken(t, name)
+    if (r) ranges.push(r)
+  }
+  ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  let out = ''
+  let pos = 0
+  for (const [s, e] of ranges) {
+    if (s < pos) continue
+    out += escapeHtml(name.slice(pos, s)) + '<mark>' + escapeHtml(name.slice(s, e)) + '</mark>'
+    pos = e
+  }
+  out += escapeHtml(name.slice(pos))
+  return out
 }
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -112,7 +118,7 @@ function copyPath(n: BmNode): void {
             <component :is="icon('Folder')" :size="16" />
           </span>
           <Favicon v-else :url="h.node.url" :name="h.node.name" :size="16" />
-          <span class="sr-name" v-html="hl(h.node.name, (q || '').trim().toLowerCase())" />
+          <span class="sr-name" v-html="hl(h.node.name, tokenizeQuery(q))" />
           <span v-if="h.node.type === 'link'" class="sr-url">{{ hostOf(h.node.url || '') }}</span>
           <span v-else class="sr-url folder-path">{{ h.folderNames.join(' › ') }}</span>
           <span class="sr-actions">
@@ -220,6 +226,12 @@ function copyPath(n: BmNode): void {
   white-space: nowrap;
   font-size: 13px;
   color: var(--text);
+}
+.sr-name :deep(mark) {
+  background: var(--search-hit, #ffdf3d);
+  color: var(--search-hit-text, #1b1b1b);
+  border-radius: 3px;
+  padding: 0 1px;
 }
 .sr-folder {
   color: var(--accent);

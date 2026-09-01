@@ -6,6 +6,7 @@ import { useClipboard, type TransferGroup } from '../../state/clipboard'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
 import { groupByParent, indexTree, folderCounts, namePath, toolbarFolder, topmostIds } from '../../lib/tree'
+import { matchQuery, tokenizeQuery } from '../../lib/search'
 import { prepareDrag } from '../../lib/drag'
 import type { BmNode } from '../../types'
 import ContextMenu from '../shared/ContextMenu.vue'
@@ -98,10 +99,10 @@ const rows = computed<Row[]>(() => {
   const d = doc.value
   if (!d) return []
   const collapsed = d.collapsed
-  const q = query.value.trim().toLowerCase()
+  const tokens = tokenizeQuery(query.value)
   const out: Row[] = []
 
-  if (!q) {
+  if (!tokens.length) {
     const bar = toolbarFolder(d.root)
     const walk = (n: BmNode, depth: number): void => {
       for (const c of n.children) {
@@ -132,7 +133,7 @@ const rows = computed<Row[]>(() => {
   const cache = new Map<string, number>()
   const matchesIn = (n: BmNode): number => {
     if (cache.has(n.id)) return cache.get(n.id)!
-    let m = n.name.toLowerCase().includes(q) ? 1 : 0
+    let m = matchQuery(tokens, n.name) ? 1 : 0
     for (const c of n.children) m += matchesIn(c)
     cache.set(n.id, m)
     return m
@@ -143,7 +144,7 @@ const rows = computed<Row[]>(() => {
       out.push({
         node: c,
         depth,
-        match: c.name.toLowerCase().includes(q),
+        match: matchQuery(tokens, c.name),
         expanded: c.type === 'folder',
       })
       if (c.type === 'folder') walk(c, depth + 1)

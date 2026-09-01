@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useDocs } from '../../state/docs'
 import { flattenTree, indexTree } from '../../lib/tree'
 import { depthOf, parentOf } from '../../lib/treeNav'
+import { matchQuery, tokenizeQuery } from '../../lib/search'
 import { useIcon } from '../../lib/icons'
 import type { BmNode } from '../../types'
 
@@ -29,11 +30,11 @@ const expandSet = computed(() => {
   const set = new Set<string>()
   const d = doc.value
   if (!d) return set
-  const q = query.value.trim().toLowerCase()
-  if (!q) return set
+  const tokens = tokenizeQuery(query.value)
+  if (!tokens.length) return set
   const idx = indexIdx.value!
   for (const n of flattenTree(d.root, d.collapsed)) {
-    if (n.name.toLowerCase().includes(q)) {
+    if (matchQuery(tokens, n.name)) {
       let cur = idx.parentOf.get(n.id)
       while (cur && cur.id !== d.root.id) {
         set.add(cur.id)
@@ -48,12 +49,12 @@ const nodes = computed(() => {
   docs.treeVersion
   const d = doc.value
   if (!d) return []
-  const q = query.value.trim().toLowerCase()
+  const tokens = tokenizeQuery(query.value)
   const parent = parentOf(d.root)
   let list = flattenTree(d.root, d.collapsed)
-  if (q) {
+  if (tokens.length) {
     const set = new Set<string>()
-    for (const n of list) if (n.name.toLowerCase().includes(q)) set.add(n.id)
+    for (const n of list) if (matchQuery(tokens, n.name)) set.add(n.id)
     for (const id of [...set]) {
       let cur = parent.get(id)
       while (cur && cur !== d.root.id) {
