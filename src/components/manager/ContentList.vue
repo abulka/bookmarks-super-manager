@@ -244,8 +244,9 @@ function startEdit(n: BmNode, field: 'name' | 'url'): void {
   editing.value = { node: n, field }
   editText.value = field === 'url' ? n.url || '' : n.name
   nextTick(() => {
-    const el = editInput.value
-    if (el && typeof el.focus === 'function') {
+    // refs inside v-for are collected into an array, so unwrap the single input
+    const el = (Array.isArray(editInput.value) ? editInput.value[0] : editInput.value) as HTMLInputElement | undefined
+    if (el) {
       el.focus()
       el.select?.()
     }

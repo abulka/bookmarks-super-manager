@@ -17,11 +17,12 @@ const ui = useUi()
 const isLink = props.payload.node.type === 'link'
 const name = ref(props.payload.node.name)
 const url = ref(props.payload.node.url || '')
-const urlInput = ref<HTMLInputElement>()
+const nameInput = ref<HTMLInputElement>()
 
 onMounted(() => {
-  if (isLink) urlInput.value?.focus()
-  else name.value
+  const el = nameInput.value
+  el?.focus()
+  el?.select?.()
 })
 
 function save(): void {
@@ -40,11 +41,11 @@ function save(): void {
     <div class="body">
       <label class="field">
         <span>Name</span>
-        <input v-model="name" type="text" @keydown.enter="save" @keydown.esc="emit('close')" />
+        <input ref="nameInput" v-model="name" type="text" @keydown.enter="save" @keydown.esc="emit('close')" />
       </label>
       <label v-if="isLink" class="field">
         <span>URL</span>
-        <input ref="urlInput" v-model="url" type="text" spellcheck="false" @keydown.enter="save" @keydown.esc="emit('close')" />
+        <input v-model="url" type="text" spellcheck="false" @keydown.enter="save" @keydown.esc="emit('close')" />
         <span class="hint">{{ hostOf(url) || 'paste a link' }}</span>
       </label>
     </div>

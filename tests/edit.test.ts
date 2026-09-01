@@ -3,10 +3,12 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { useDocs } from '../src/state/docs'
+import { useUi } from '../src/state/ui'
 import { findNode } from '../src/lib/tree'
 import type { BmNode } from '../src/types'
 import ContentList from '../src/components/manager/ContentList.vue'
 import ManagerView from '../src/components/views/ManagerView.vue'
+import Modal from '../src/components/shared/Modal.vue'
 
 let docId = ''
 
@@ -67,6 +69,9 @@ it('F2 rename commits, esc cancels, dbl-click reveals in tree, clicking away exi
   let field = document.querySelector<HTMLInputElement>('.inline-edit')
   expect(field).not.toBeNull()
   expect(field!.value).toBe('Alpha')
+  // F2 must hand focus to the inline edit box (regression: refs inside v-for
+  // collected into an array so focus was silently dropped)
+  expect(document.activeElement).toBe(field!)
 
   // — Enter commits the rename (and must NOT open a URL)
   type(field!, 'Alphonse')
@@ -108,5 +113,23 @@ it('F2 rename commits, esc cancels, dbl-click reveals in tree, clicking away exi
   expect(docs.byId(docId)!.selected).toContain('a')
   expect(docs.byId(docId)!.view).toBe('manager')
 
+  w.unmount()
+})
+
+it('rename dialog focuses the name field (tree right-click → Rename…)', async () => {
+  const docs = useDocs()
+  const ui = useUi()
+  const root = docs.byId(docId)!.root
+  const f1 = findNode(root, 'f1')!
+  const w = mount(Modal, { attachTo: document.body })
+  ui.openModal('editNode', { docId, node: f1 })
+  await waitFor(() => !!document.querySelector('.modal input'))
+  const inp = document.querySelector<HTMLInputElement>('.modal input')
+  expect(inp).not.toBeNull()
+  expect(inp!.value).toBe('F1')
+  // focus must land in the name field (and select it), not <body>
+  expect(document.activeElement).toBe(inp)
+  expect(inp!.selectionStart).toBe(0)
+  expect(inp!.selectionEnd).toBe(f1.name.length)
   w.unmount()
 })

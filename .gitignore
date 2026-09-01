@@ -27,3 +27,4 @@ public/samples/*
 *.njsproj
 *.sln
 *.sw?
+.playwright-mcp/
