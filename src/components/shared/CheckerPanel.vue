@@ -12,6 +12,24 @@ const icon = (name: string) => useIcon(name)
 
 const pct = computed(() => Math.round(checker.progress * 100))
 
+// Show an Apply button whenever there is something to apply: dead marks to add,
+// rewrites, or stale ❌ to restore. A pure restore (all links alive again) has
+// no deadIds/rewriteIds, so it must be gated on `restored` too — otherwise the
+// only path that revives a previously-dead link is hidden.
+const applyLabel = computed(() => {
+  if (checker.collect) {
+    return checker.deadIds.length ? 'Collect ❌ into folder' : 'Apply'
+  }
+  if (!checker.restored && !checker.rewriteIds.length) {
+    return `Mark ${checker.deadIds.length} dead ❌`
+  }
+  const parts: string[] = []
+  if (checker.deadIds.length) parts.push(`${checker.deadIds.length} dead ❌`)
+  if (checker.restored) parts.push(`${checker.restored} restored`)
+  if (checker.rewriteIds.length) parts.push(`${checker.rewriteIds.length} rewritten`)
+  return `Apply: ${parts.join(', ')}`
+})
+
 function apply(): void {
   const checked = checker.checkedIds ?? []
   if (!checked.length) {
@@ -24,11 +42,9 @@ function apply(): void {
     const n = docs.rewriteLinks(checker.docId!, rewriteIds)
     ui.notify('info', `Rewrote ${n} link${n === 1 ? '' : 's'} to current URLs`)
   }
-  if (checker.collect) {
-    if (deadIds.length) {
-      docs.collectDead(checker.docId!, deadIds)
-      docs.setView(checker.docId!, 'dead')
-    }
+  if (checker.collect && deadIds.length) {
+    docs.collectDead(checker.docId!, deadIds)
+    docs.setView(checker.docId!, 'dead')
     ui.notify('success', `Checked ${checked.length} links · ${deadIds.length} dead${deadIds.length ? ' collected into a folder' : ''}`)
   } else {
     docs.reconcileDead(checker.docId!, deadIds, checked)
@@ -62,14 +78,8 @@ function apply(): void {
     </div>
     <button v-if="checker.phase === 'running'" class="btn sm" @click="checker.cancel()">Cancel</button>
     <template v-else>
-      <button v-if="checker.deadIds.length || checker.rewriteIds.length" class="btn sm" :class="{ danger: checker.collect }" @click="apply">
-        {{
-          checker.collect
-            ? 'Collect ❌ into folder'
-            : checker.restored || checker.rewriteIds.length
-              ? `Apply: ${checker.deadIds.length} dead ❌${checker.restored ? `, ${checker.restored} restored` : ''}${checker.rewriteIds.length ? `, ${checker.rewriteIds.length} rewritten` : ''}`
-              : `Mark ${checker.deadIds.length} dead ❌`
-        }}
+      <button v-if="checker.deadIds.length || checker.rewriteIds.length || checker.restored" class="btn sm" :class="{ danger: checker.collect }" @click="apply">
+        {{ applyLabel }}
       </button>
       <button class="btn sm ghost" @click="checker.reset()">Dismiss</button>
     </template>

@@ -67,7 +67,43 @@ function looksParked(sample) {
   return PARKED_MARKERS.some((re) => re.test(sample))
 }
 
-async function checkUrl(url) {
+// Node's fetch (undici) validates TLS strictly against its own CA store and
+// rejects servers that serve an incomplete/misconfigured cert chain, even when
+// browsers load them fine (browsers fill in the missing intermediate from the
+// OS store or via AIA). Such a host is misconfigured, not gone — never dead.
+const CERT_VERIFY_CODES = new Set([
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'CERT_SIGNATURE_FAILURE',
+  'CERT_REVOKED',
+  'CERT_UNTRUSTED',
+  'CERT_REJECTED',
+  'INVALID_CA',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+])
+
+function isCertVerifyError(e) {
+  let cur = e
+  for (let depth = 0; depth < 6 && cur !== null && typeof cur === 'object'; depth++) {
+    if (typeof cur.code === 'string' && CERT_VERIFY_CODES.has(cur.code)) return true
+    if (
+      typeof cur.message === 'string' &&
+      /unable to verify the first certificate|unable to get(?: local)? issuer certificate|certificate (?:has expired|not yet valid|verify failed)|self[- ]signed|leaf signature|does not match(?: the)? certificate|hostname[^.]* (?:does not match|mismatch)/i.test(
+        cur.message,
+      )
+    )
+      return true
+    cur = cur.cause
+  }
+  return false
+}
+
+export async function checkUrl(url) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 20000)
   try {
@@ -106,6 +142,12 @@ async function checkUrl(url) {
     if (typeof e === 'object' && e !== null && e?.name === 'AbortError') {
       return { ok: true, status: 0, error: null, note: 'timeout' }
     }
+    // A TLS certificate-verification failure is a misconfigured host, not a
+    // gone page — report it as unverified rather than dead.
+    if (isCertVerifyError(e)) {
+      return { ok: true, status: 0, error: null, note: 'tls' }
+    }
+    // Network-level failure (DNS, connection refused) → genuinely dead.
     return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) }
   } finally {
     clearTimeout(timer)

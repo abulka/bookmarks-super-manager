@@ -4,6 +4,7 @@ import { useDocs } from '../../state/docs'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
 import { hostOf } from '../../lib/url'
+import { namePath } from '../../lib/tree'
 import type { BmNode } from '../../types'
 import Favicon from '../shared/Favicon.vue'
 
@@ -88,6 +89,19 @@ function rewriteAll(): void {
 function openExternal(n: BmNode): void {
   if (n.url) window.open(n.url, '_blank', 'noopener')
 }
+function copyUrl(n: BmNode): void {
+  if (!n.url) return
+  navigator.clipboard?.writeText(n.url).then(() => ui.notify('info', 'URL copied'))
+}
+function copyPath(n: BmNode): void {
+  const d = doc.value
+  if (!d) return
+  const text = namePath(d.root, n.id).join(' / ')
+  navigator.clipboard?.writeText(text).then(() => ui.notify('info', 'Path copied'))
+}
+function revealInTree(n: BmNode): void {
+  docs.revealPath(props.docId, n.id)
+}
 function selectAll(): void {
   docs.select(
     doc.value!.id,
@@ -164,6 +178,9 @@ function onKeydown(e: KeyboardEvent): void {
         <span class="dr-url truncate">{{ hostOf(x.node.url || '') }}</span>
         <span class="dr-actions">
           <button class="icon-btn" title="Open" @click.stop="openExternal(x.node)"><component :is="icon('ExternalLink')" :size="13" /></button>
+          <button class="icon-btn" title="Copy URL" @click.stop="copyUrl(x.node)"><component :is="icon('Copy')" :size="13" /></button>
+          <button class="icon-btn" title="Copy path" @click.stop="copyPath(x.node)"><component :is="icon('Clipboard')" :size="13" /></button>
+          <button class="icon-btn" title="Show in tree" @click.stop="revealInTree(x.node)"><component :is="icon('ListTree')" :size="13" /></button>
           <button class="icon-btn" title="Mark alive" @click.stop="docs.mutClearDead(doc.id, x.node.id)"><component :is="icon('Eye')" :size="13" /></button>
           <button class="icon-btn danger" title="Purge" @click.stop="docs.mutDelete(doc.id, [x.node.id])"><component :is="icon('Trash2')" :size="13" /></button>
         </span>
