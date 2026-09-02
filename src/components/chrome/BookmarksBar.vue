@@ -4,7 +4,7 @@ import { useDocs } from '../../state/docs'
 import { useDnd } from '../../state/dnd'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
-import { indexTree } from '../../lib/tree'
+import { indexTree, toolbarFolder as findToolbarFolder } from '../../lib/tree'
 import { prepareDrag } from '../../lib/drag'
 import type { BmNode } from '../../types'
 import Favicon from '../shared/Favicon.vue'
@@ -19,18 +19,14 @@ const doc = computed(() => docs.activeDoc)
 const toolbarFolder = computed<BmNode | null>(() => {
   docs.treeVersion
   const d = doc.value
-  if (!d) return null
-  const direct = d.root.children.find(
-    (c) => c.type === 'folder' && (c.attrs?.PERSONAL_TOOLBAR_FOLDER === 'true' || c.name.toLowerCase().includes('bookmarks bar'))
-  )
-  return direct ?? d.root.children.find((c) => c.type === 'folder') ?? null
+  return d ? findToolbarFolder(d.root) : null
 })
 const otherFolders = computed<BmNode[]>(() => {
   docs.treeVersion
   const d = doc.value
+  if (!d) return []
   const tf = toolbarFolder.value
-  if (!d || !tf) return []
-  return d.root.children.filter((c) => c.type === 'folder' && c.id !== tf.id)
+  return d.root.children.filter((c) => c.type === 'folder' && (tf === null || c.id !== tf.id))
 })
 
 const openMenu = ref<string>('') // node id whose flyout is open

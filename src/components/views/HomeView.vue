@@ -4,7 +4,7 @@ import { toRaw } from 'vue'
 import { useDocs } from '../../state/docs'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
-import { walk } from '../../lib/tree'
+import { toolbarFolder as findToolbarFolder, walk } from '../../lib/tree'
 import type { BmNode } from '../../types'
 import Favicon from '../shared/Favicon.vue'
 
@@ -18,12 +18,7 @@ const q = ref('')
 
 const toolbarFolder = computed<BmNode | null>(() => {
   const d = doc.value
-  if (!d) return null
-  return (
-    d.root.children.find((c) => c.type === 'folder' && (c.attrs?.PERSONAL_TOOLBAR_FOLDER === 'true' || c.name.includes('Bookmarks bar'))) ??
-    d.root.children.find((c) => c.type === 'folder') ??
-    null
-  )
+  return d ? findToolbarFolder(d.root) : null
 })
 
 const recent = computed(() => {
