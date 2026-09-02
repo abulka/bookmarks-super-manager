@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useDocs } from '../../state/docs'
 import { usePrefs } from '../../state/prefs'
 import { useUi } from '../../state/ui'
@@ -17,11 +17,12 @@ const text = ref('')
 const omni = ref<HTMLInputElement>()
 
 // session-only nav history per document
-const history: Record<string, string[]> = {}
-const histPos: Record<string, number> = {}
+const history = reactive<Record<string, string[]>>({})
+const histPos = reactive<Record<string, number>>({})
 function pushHistory(docId: string, key: string): void {
   const h = (history[docId] ??= [])
-  h.length = (histPos[docId] ?? 0) + 1
+  const pos = histPos[docId] ?? 0
+  if (h.length > pos + 1) h.length = pos + 1
   h.push(key)
   histPos[docId] = h.length - 1
 }
@@ -44,7 +45,30 @@ const locationKey = computed(() => {
 })
 
 watch(locationKey, (k, prev) => {
-  if (k && k !== prev && docs.activeDocId) pushHistory(docs.activeDocId, k)
+  if (!k || k === prev) return
+  const id = docs.activeDocId
+  if (!id) return
+  if (history[id]?.[histPos[id]] === k) return
+  pushHistory(id, k)
+})
+
+const seeded: Record<string, boolean> = {}
+watch(
+  () => docs.activeDocId,
+  (id) => {
+    if (!id || seeded[id]) return
+    seeded[id] = true
+    const k = locationKey.value
+    if (k && !history[id]?.length) pushHistory(id, k)
+  },
+  { immediate: true }
+)
+
+const canBack = computed(() => (histPos[docs.activeDocId ?? ''] ?? 0) > 0)
+const canForward = computed(() => {
+  const id = docs.activeDocId ?? ''
+  const pos = histPos[id] ?? 0
+  return pos < (history[id]?.length ?? 0) - 1
 })
 
 const locationUrl = computed(() => {
@@ -198,26 +222,35 @@ function onSampleDocDown(e: MouseEvent): void {
   const t = e.target as HTMLElement | null
   if (samplesOpen.value && t && !t.closest('.sample-wrap')) samplesOpen.value = false
 }
-function onSampleKey(e: KeyboardEvent): void {
-  if (e.key === 'Escape') samplesOpen.value = false
+function onGlobalKey(e: KeyboardEvent): void {
+  if (e.key !== 'Escape') return
+  if (samplesOpen.value) {
+    samplesOpen.value = false
+    return
+  }
+  const d = active.value
+  if (d && d.view === 'search') {
+    editing.value = false
+    docs.setView(d.id, 'manager')
+  }
 }
 onMounted(() => {
   document.addEventListener('mousedown', onSampleDocDown)
-  window.addEventListener('keydown', onSampleKey)
+  window.addEventListener('keydown', onGlobalKey)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onSampleDocDown)
-  window.removeEventListener('keydown', onSampleKey)
+  window.removeEventListener('keydown', onGlobalKey)
 })
 </script>
 
 <template>
   <div class="toolbar" :data-ver="docs.treeVersion">
     <div class="toolbar-group">
-      <button class="icon-btn" title="Back" :disabled="(histPos[docs.activeDocId ?? ''] ?? 0) <= 0" @click="back">
+      <button class="icon-btn" title="Back" :disabled="!canBack" @click="back">
         <component :is="icon('ArrowLeft')" :size="17" />
       </button>
-      <button class="icon-btn" title="Forward" @click="forward">
+      <button class="icon-btn" title="Forward" :disabled="!canForward" @click="forward">
         <component :is="icon('ArrowRight')" :size="17" />
       </button>
       <button class="icon-btn" title="Reload" @click="refresh">
