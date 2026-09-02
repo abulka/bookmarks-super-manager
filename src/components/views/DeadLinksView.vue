@@ -41,6 +41,20 @@ const deadItems = computed<DeadItem[]>(() => {
 function refreshCheck(): void {
   const d = doc.value
   if (!d) return
+  // Re-check only the dead links listed in this view — not the whole file (or a
+  // folder selected back in the manager). Alive ones drop off the list on apply.
+  const items = deadItems.value.map((x) => ({ id: x.node.id, url: x.node.url || '' })).filter((x) => x.url)
+  if (!items.length) {
+    ui.notify('info', 'No dead links to re-check')
+    return
+  }
+  import('../../state/checker').then(({ useChecker }) => {
+    useChecker().start(d.id, items, false)
+  })
+}
+function runFullCheck(): void {
+  const d = doc.value
+  if (!d) return
   const items: { id: string; url: string }[] = []
   const visit = (n: BmNode) => {
     if (n.type === 'link' && n.url) items.push({ id: n.id, url: n.url })
@@ -135,8 +149,8 @@ function onKeydown(e: KeyboardEvent): void {
         <span class="dh-count">{{ deadItems.length }} marked</span>
       </div>
       <div class="dh-actions">
-        <button class="btn sm" title="Re-check every link in this file and update dead markers" @click="refreshCheck">
-          <component :is="icon('Network')" :size="14" /> Check all links
+        <button class="btn sm" title="Re-check the dead links listed here and update their dead markers" @click="refreshCheck">
+          <component :is="icon('Network')" :size="14" /> Re-check dead links
         </button>
         <button v-if="deadItems.length" class="btn sm" title="Clear the ❌ dead marker from every link (bookmarks are kept)" @click="restoreAll">
           <component :is="icon('RotateCcw')" :size="14" /> Revive all
@@ -166,7 +180,7 @@ function onKeydown(e: KeyboardEvent): void {
       <div v-if="!deadItems.length" class="empty-list">
         <component :is="icon('Skull')" :size="44" />
         <p>Nothing marked dead yet. Run the link checker to find broken bookmarks.</p>
-        <button class="btn primary" @click="refreshCheck">
+        <button class="btn primary" @click="runFullCheck">
           <component :is="icon('Network')" :size="14" /> Check all links
         </button>
       </div>
@@ -178,6 +192,7 @@ function onKeydown(e: KeyboardEvent): void {
         <span class="dr-url truncate">{{ hostOf(x.node.url || '') }}</span>
         <span class="dr-actions">
           <button class="icon-btn" title="Open" @click.stop="openExternal(x.node)"><component :is="icon('ExternalLink')" :size="13" /></button>
+          <button class="icon-btn" title="Edit name & URL" @click.stop="ui.openModal('editNode', { docId: doc.id, node: x.node })"><component :is="icon('Pencil')" :size="13" /></button>
           <button class="icon-btn" title="Copy URL" @click.stop="copyUrl(x.node)"><component :is="icon('Copy')" :size="13" /></button>
           <button class="icon-btn" title="Copy path" @click.stop="copyPath(x.node)"><component :is="icon('Clipboard')" :size="13" /></button>
           <button class="icon-btn" title="Show in tree" @click.stop="revealInTree(x.node)"><component :is="icon('ListTree')" :size="13" /></button>
