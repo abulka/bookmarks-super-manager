@@ -78,6 +78,40 @@ describe('linkcheck status classification (netlify function)', () => {
     expect(r).toMatchObject({ ok: false, status: 404 })
   })
 
+  it('treats a 404 that still serves a real page as unverified, not dead', async () => {
+    const longBody =
+      '<html><head><title>Hantek6002BE Series</title></head><body><h1>Digital Oscilloscope</h1><p>' +
+      'lorem ipsum dolor sit amet '.repeat(40) +
+      '</p></body></html>'
+    stubFetch(
+      undefined,
+      new Response(longBody, {
+        status: 404,
+        headers: { 'content-type': 'text/html' },
+      }),
+    )
+    const r = await checkUrl('https://www.hantek.com/en/ProductDetail_2_31.html')
+    expect(r).toMatchObject({ ok: true, status: 404, note: 'page' })
+  })
+
+  it('still treats a genuine HTML 404 page (with not-found language) as dead', async () => {
+    stubFetch(
+      undefined,
+      new Response('<html><head><title>Page not found</title></head><body><h1>404 Not Found</h1><p>The page you are looking for does not exist.</p></body></html>', {
+        status: 404,
+        headers: { 'content-type': 'text/html' },
+      }),
+    )
+    const r = await checkUrl('https://gone.example/page')
+    expect(r).toMatchObject({ ok: false, status: 404 })
+  })
+
+  it('still treats a short marker-less 404 (no real-page structure) as dead', async () => {
+    stubFetch(undefined, new Response('Gone.', { status: 410, headers: { 'content-type': 'text/html' } }))
+    const r = await checkUrl('https://gone.example/page')
+    expect(r).toMatchObject({ ok: false, status: 410 })
+  })
+
   it('still treats a 404 on a code host as unverified (private repo)', async () => {
     stubFetch(undefined, new Response('nope', { status: 404 }))
     const r = await checkUrl('https://github.com/someone/private-repo')

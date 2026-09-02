@@ -17,6 +17,32 @@ const PARKED_MARKERS = [
   /(?:sedo|parkingcrew|godaddy|namecheap|register\.com)\b.*(?:parking|domain\s+for\s+sale)/i,
 ]
 
+// Language that marks a response as a genuine "not found" page. Used to tell a
+// real 404/410 apart from an aging/misconfigured server that returns 404/410
+// while still serving the actual page body (e.g. Hantek's legacy ASP routes).
+// Product pages can legitimately contain "404" only as part of longer tokens
+// (models, part numbers), which the word-boundary version below does NOT match.
+const NOT_FOUND_MARKERS = [
+  /\b404\b/i,
+  /\b410(?: gone)?\b/i,
+  /error\s*[: ]?\s*40[014]\b/i,
+  /(?:page|file|document|resource|url)\s+not\s+found/i,
+  /not\s+found\s+(?:on|for|error|404)/i,
+  /no\s+such\s+(?:page|document|file|product)/i,
+  /(?:could|can|couldn'?t)\s+(?:not\s+)?be\s+found/i,
+  /does\s+not\s+exist/i,
+  /unable\s+to\s+(?:locate|find)(?:\s+the)?\s+(?:page|requested)/i,
+  /page\s+(?:you\s+were|you\s+are)\s+looking\s+for/i,
+  /找不到|不存在|页面不存在|无法找到|页面未找到|无效链接/i,
+]
+
+/** A 404/410 whose body is unmistakably a real page (title + no not-found language). */
+function looksLikeRealPage(sample) {
+  if (!sample || sample.length < 500) return false
+  if (NOT_FOUND_MARKERS.some((re) => re.test(sample))) return false
+  return /<title[^>]*>\s*[^<\s][^<]*<\/title>/i.test(sample)
+}
+
 // Code hosts return 404 to anonymous clients for PRIVATE repos (a privacy
 // feature), so a 404 there can mean "private", not "deleted".
 const CODE_HOSTS = ['github.com', 'gist.github.com', 'gitlab.com', 'bitbucket.org']
@@ -103,14 +129,35 @@ function isCertVerifyError(e) {
   return false
 }
 
+// Newer Node versions enable HTTP/2 by default in the global fetch; undici's
+// HTTP/2 path can re-raise an aborting peer as an *unhandled* 'error' event that
+// crashes the process. Prefer plain HTTP/1.1 when undici is available, falling
+// back to the global fetch (already HTTP/1.1 on older Node) otherwise.
+let http1Dispatcher
+let http1Settled = false
+async function http11() {
+  if (!http1Settled) {
+    http1Settled = true
+    try {
+      const { Agent } = await import('undici')
+      http1Dispatcher = new Agent({ connections: 64 })
+    } catch {
+      http1Dispatcher = undefined
+    }
+  }
+  return http1Dispatcher
+}
+
 export async function checkUrl(url) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 20000)
+  const dispatcher = await http11()
   try {
     const res = await fetch(url, {
       method: 'GET',
       redirect: 'follow',
       signal: controller.signal,
+      dispatcher,
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -121,8 +168,22 @@ export async function checkUrl(url) {
     const status = res.status
     const contentType = res.headers.get('content-type') ?? ''
     if (status === 404 || status === 410) {
+      // A 404 on a code host can mean the repo is private (returns 404 to
+      // anonymous clients), not deleted — treat as unverified, not dead.
       if (status === 404 && isPrivateFriendlyCodeHost(url)) {
         return { ok: true, status, error: null, note: 'unverified' }
+      }
+      // A few aging/misconfigured servers return 404/410 while still serving the
+      // full page body for the URL (Hantek's legacy routes do exactly this). If
+      // the body is unmistakably a real page, the content is reachable — report
+      // it unverified so it isn't falsely marked dead every run.
+      if (/html|text\//i.test(contentType)) {
+        const sample = await readSample(res)
+        if (looksLikeRealPage(sample)) {
+          return { ok: true, status, error: null, note: 'page' }
+        }
+      } else {
+        await res.body?.cancel().catch(() => {})
       }
       return { ok: false, status, error: null }
     }
