@@ -13,29 +13,33 @@ const CONCURRENCY = 18
 const HEAD_TIMEOUT_MS = 7000
 const GET_TIMEOUT_MS = 2500
 
-// Same-origin endpoint (see app/linkcheck-server.ts) that performs a real
-// server-side status check on the user's own machine. Returns a status only
-// when the dev/preview server is running; otherwise we fall back to the
+// Same-origin endpoints that perform a real server-side status check:
+// - /__linkcheck is the Vite dev/preview proxy (linkcheck-server.ts).
+// - /.netlify/functions/linkcheck is the deployed Netlify Function.
+// Whichever responds first/reliably wins; otherwise we fall back to the
 // network-level client check below.
-const PROXY = '/__linkcheck'
+const PROXIES = ['/__linkcheck', '/.netlify/functions/linkcheck']
 
 let cancelled = false
 let current: { urls: string[]; next: number } | null = null
 
-/** Ask the local proxy for the real HTTP status. Returns null when unavailable. */
+/** Ask a same-origin server endpoint for the real HTTP status. Returns null when unavailable. */
 async function proxyCheck(url: string): Promise<ProbeStatus | null> {
-  try {
-    const r = await fetch(PROXY, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    })
-    if (!r.ok) return null
-    const j = (await r.json()) as { ok: boolean; status?: number }
-    return j.ok ? 'alive' : 'dead'
-  } catch {
-    return null
+  for (const endpoint of PROXIES) {
+    try {
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      if (!r.ok) continue
+      const j = (await r.json()) as { ok: boolean; status?: number }
+      return j.ok ? 'alive' : 'dead'
+    } catch {
+      // endpoint absent (e.g. the Netlify Function path on the dev server) — try the next
+    }
   }
+  return null
 }
 
 /** Network-level liveness only — cannot see HTTP 4xx/5xx (opaque responses). */
