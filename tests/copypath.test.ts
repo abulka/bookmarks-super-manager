@@ -39,7 +39,7 @@ const flush = async (w: ReturnType<typeof mount>) => {
   await sleep(10)
 }
 
-it('right-click context menu on an item shows Copy path with c shortcut', async () => {
+it('right-click context menu on an item shows Copy path with ⌥C shortcut', async () => {
   const w = mount(ContentList, { props: { docId }, attachTo: document.body })
   await flush(w)
   const row = w.findAll('.bm-row').find((r) => r.text().includes('Alpha'))
@@ -50,22 +50,34 @@ it('right-click context menu on an item shows Copy path with c shortcut', async 
   expect(menu).toBeTruthy()
   const item = [...(menu?.querySelectorAll('.cm-item') ?? [])].find((el) => el.textContent?.includes('Copy path'))
   expect(item).toBeTruthy()
-  expect(item!.querySelector('.kbd')?.textContent?.trim()).toBe('c')
-  // pressing c on the document triggers the action while the menu is open
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
+  expect(item!.querySelector('.kbd')?.textContent?.trim()).toBe('⌥C')
+  // pressing ⌥C on the document triggers the action while the menu is open
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ç', code: 'KeyC', altKey: true, bubbles: true }))
   await flush(w)
   expect((navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls.some(([t]) => t === 'Favs / Alpha sub / Alpha'.replace('Favs / ', 'Devel / ')) || true)
   w.unmount()
 })
 
-it('c shortcut with the list focused copies the selected item path', async () => {
+it('⌥C shortcut with the list focused copies the selected item path', async () => {
   const w = mount(ContentList, { props: { docId }, attachTo: document.body })
   await flush(w)
   const list = w.find('.content-list').element as HTMLElement
-  list.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
+  list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ç', code: 'KeyC', altKey: true, bubbles: true }))
   await flush(w)
   const calls = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls as string[][]
   expect(calls.some(([t]) => t === 'Devel / Alpha')).toBe(true)
+  w.unmount()
+})
+
+it('plain c (no modifier) does not copy a path', async () => {
+  const w = mount(ContentList, { props: { docId }, attachTo: document.body })
+  await flush(w)
+  const before = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls.length
+  const list = w.find('.content-list').element as HTMLElement
+  list.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
+  await flush(w)
+  const after = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls.length
+  expect(after).toBe(before)
   w.unmount()
 })
 
@@ -88,12 +100,39 @@ it('copy path copies every selected item when multiple are selected', async () =
   const w = mount(ContentList, { props: { docId }, attachTo: document.body })
   await flush(w)
   const list = w.find('.content-list').element as HTMLElement
-  list.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
+  list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ç', code: 'KeyC', altKey: true, bubbles: true }))
   await flush(w)
   const calls = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls as string[][]
   const joined = calls.map(([t]) => t).join('\n')
   expect(joined).toContain('Devel / Alpha')
   expect(joined).toContain('Devel / Alpha sub')
   expect(joined.split('\n').length).toBeGreaterThanOrEqual(2)
+  w.unmount()
+})
+
+it('typing in the move-to-folder filter does not copy a path or delete an item', async () => {
+  const docs = useDocs()
+  const doc = docs.docs.find((d) => d.id === docId)!
+  doc.selected = ['a']
+  const w = mount(ContentList, { props: { docId }, attachTo: document.body })
+  await flush(w)
+  const row = w.findAll('.bm-row').find((r) => r.text().includes('Alpha'))!
+  row.trigger('contextmenu')
+  await flush(w)
+  const menu = document.querySelector('.context-menu')!
+  const move = [...(menu.querySelectorAll('.cm-item') ?? [])].find((el) => el.textContent?.includes('Move to folder'))
+  expect(move).toBeTruthy()
+  ;(move as HTMLElement).click()
+  await flush(w)
+  const input = document.querySelector('.fp-search input') as HTMLInputElement
+  expect(input).toBeTruthy()
+  input.focus()
+
+  const before = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls.length
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }))
+  await flush(w)
+  expect((navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before)
+  expect(doc.selected).toEqual(['a'])
   w.unmount()
 })

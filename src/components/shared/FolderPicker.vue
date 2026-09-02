@@ -77,10 +77,15 @@ function pick(id: string): void {
 
 <template>
   <div class="fp" :data-ver="docs.treeVersion">
-    <div class="fp-head">Choose a folder</div>
+    <div class="fp-head">
+      <span>Choose a folder</span>
+      <button class="fp-cancel icon-btn" title="Cancel (Esc)" @click="emit('close')">
+        <component :is="icon('X')" :size="14" />
+      </button>
+    </div>
     <div class="fp-search">
       <component :is="icon('Folder')" :size="15" />
-      <input v-model="query" placeholder="Filter folders…" autofocus />
+      <input v-model="query" placeholder="Filter folders…" autofocus @keydown.esc.stop="emit('close')" />
     </div>
     <div class="fp-list">
       <button
@@ -107,9 +112,16 @@ function pick(id: string): void {
   height: 380px;
 }
 .fp-head {
-  padding: 18px 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 0;
   font-size: 15px;
   font-weight: 600;
+}
+.fp-cancel {
+  color: var(--text-3);
 }
 .fp-search {
   display: flex;

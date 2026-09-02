@@ -174,12 +174,22 @@ watch(editing, (v) => {
 
 function onRowKey(e: KeyboardEvent): void {
   if (editing.value) return
+  // never turn keystrokes typed into an input/editable into list shortcuts
+  const et = e.target as HTMLElement | null
+  if (et?.closest?.('input, textarea, select, [contenteditable]')) return
   const d = doc.value
   if (!d || !children.value.length) return
   const list = children.value
   const idx = list.findIndex((c) => c.id === d.selected[0])
   const cur = idx >= 0 ? idx : 0
   let next = cur
+  // copy path is Alt+C (physical key): on macOS ⌥C reports a special character
+  // as `key` (e.g. "ç"), so match the physical key and modifiers up front
+  if (e.code === 'KeyC' && e.altKey && !e.metaKey && !e.ctrlKey) {
+    e.preventDefault()
+    copyPath(list[cur])
+    return
+  }
   switch (e.key) {
     case 'ArrowDown':
       e.preventDefault()
@@ -207,11 +217,6 @@ function onRowKey(e: KeyboardEvent): void {
         e.preventDefault()
         docs.select(d.id, list.map((c) => c.id), false)
       }
-      return
-    case 'c':
-      if (e.metaKey || e.ctrlKey) return // ⌘C is handled globally (copy)
-      e.preventDefault()
-      copyPath(list[cur])
       return
     default:
       return
@@ -395,7 +400,7 @@ function openMenu(e: MouseEvent, n: BmNode): void {
   if (n.type === 'link' && n.url) {
     items.push({ label: 'Copy URL', icon: 'Copy', action: () => copyUrl(n) })
   }
-  items.push({ label: 'Copy path', icon: 'Clipboard', shortcut: 'c', action: () => copyPath(n) })
+  items.push({ label: 'Copy path', icon: 'Clipboard', shortcut: '⌥C', action: () => copyPath(n) })
   items.push('sep')
   items.push({ label: 'Copy', icon: 'CopyPlus', shortcut: '⌘C', action: () => copySelected() })
   items.push({ label: 'Cut', icon: 'Scissors', shortcut: '⌘X', action: () => cutSelected() })

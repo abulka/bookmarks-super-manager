@@ -36,15 +36,33 @@ const onKey = (e: KeyboardEvent) => {
     hide()
     return
   }
-  if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey) return
-  const k = e.key.toLowerCase()
-  const item = pos.items.find((it) => it !== 'sep' && it.shortcut && it.shortcut.toLowerCase() === k)
+  const item = pos.items.find((it) => it !== 'sep' && it.shortcut && shortcutMatches(it.shortcut, e))
   if (item && item !== 'sep') {
     e.preventDefault()
     e.stopPropagation()
     item.action()
     hide()
   }
+}
+
+/** match a shortcut string (e.g. "⌥C", "⌘C", "c", "F2") against a keydown event */
+function shortcutMatches(shortcut: string, e: KeyboardEvent): boolean {
+  const modRe = /[⌥⌘⌃⇧]/g
+  const hasMods = /[⌥⌘⌃⇧]/.test(shortcut)
+  const plain = shortcut.replace(modRe, '').trim().toLowerCase()
+  // legacy bare-letter shortcuts only fire with no modifiers pressed
+  if (!hasMods) {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false
+    if (e.key.length !== 1) return false
+    return e.key.toLowerCase() === plain
+  }
+  if (/[⌥]/.test(shortcut) && !e.altKey) return false
+  if (/[⌘]/.test(shortcut) && !e.metaKey) return false
+  if (/[⌃]/.test(shortcut) && !e.ctrlKey) return false
+  if (/[⇧]/.test(shortcut) && !e.shiftKey) return false
+  // compare against the physical key: on macOS ⌥C reports a special character as `key`
+  const phys = (e.code || e.key).replace(/^(Key|Digit|Numpad)/, '').toLowerCase()
+  return phys === plain
 }
 
 onMounted(() => {
