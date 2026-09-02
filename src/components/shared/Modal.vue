@@ -9,6 +9,7 @@ import EditDoc from './dialogs/EditDoc.vue'
 import ImportTarget from './dialogs/ImportTarget.vue'
 import ExportDialog from './dialogs/ExportDialog.vue'
 import StatsSheet from './dialogs/StatsSheet.vue'
+import AboutDialog from './dialogs/AboutDialog.vue'
 
 const ui = useUi()
 const empty = {} as never
@@ -50,6 +51,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <template v-else-if="ui.modal.kind === 'stats'">
           <StatsSheet :payload="((ui.modal.payload ?? empty) as any)" @close="close" />
         </template>
+        <template v-else-if="ui.modal.kind === 'about'">
+          <AboutDialog @close="close" />
+        </template>
       </div>
     </div>
   </Teleport>
@@ -79,5 +83,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 /* the stats sheet needs more room than the default 460px modal */
 .modal.stats {
   width: min(600px, calc(100vw - 40px));
+}
+/* the about/help sheet hosts wider documentation */
+.modal.about {
+  width: min(720px, calc(100vw - 40px));
+  max-height: min(80vh, 720px);
 }
 </style>

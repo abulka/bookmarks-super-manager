@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDocs } from '../../state/docs'
 import { usePrefs } from '../../state/prefs'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
+import { loadSampleNames, fetchSampleText } from '../../lib/samples'
 import { crumbPath, indexTree, namePath } from '../../lib/tree'
 
 const docs = useDocs()
@@ -165,6 +166,49 @@ interface GlobalWindow {
 }
 const g = window as GlobalWindow
 g.__focusOmnibox = beginEdit
+
+// ---- sample library popover ----
+const samples = ref<string[]>([])
+const samplesOpen = ref(false)
+const samplesLoading = ref(false)
+
+async function toggleSamples(): Promise<void> {
+  if (samplesOpen.value) {
+    samplesOpen.value = false
+    return
+  }
+  if (!samples.value.length && !samplesLoading.value) {
+    samplesLoading.value = true
+    samples.value = await loadSampleNames()
+    samplesLoading.value = false
+  }
+  samplesOpen.value = true
+}
+async function pickSample(name: string): Promise<void> {
+  samplesOpen.value = false
+  const text = await fetchSampleText(name)
+  if (text == null) {
+    ui.notify('error', `Couldn't load ${name}`)
+    return
+  }
+  const id = docs.openFromText(text, name)
+  if (id) ui.notify('success', `Opened ${name}`)
+}
+function onSampleDocDown(e: MouseEvent): void {
+  const t = e.target as HTMLElement | null
+  if (samplesOpen.value && t && !t.closest('.sample-wrap')) samplesOpen.value = false
+}
+function onSampleKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape') samplesOpen.value = false
+}
+onMounted(() => {
+  document.addEventListener('mousedown', onSampleDocDown)
+  window.addEventListener('keydown', onSampleKey)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onSampleDocDown)
+  window.removeEventListener('keydown', onSampleKey)
+})
 </script>
 
 <template>
@@ -217,6 +261,22 @@ g.__focusOmnibox = beginEdit
     </div>
 
     <div class="toolbar-group">
+      <div class="sample-wrap">
+        <button class="icon-btn" title="Open a sample library" @click="toggleSamples">
+          <component :is="icon('FlaskConical')" :size="16" />
+        </button>
+        <div v-if="samplesOpen" class="sample-pop">
+          <div class="sp-title">Sample libraries</div>
+          <button v-if="samplesLoading" class="sp-item" disabled>Loading…</button>
+          <template v-else-if="samples.length">
+            <button v-for="s in samples" :key="s" class="sp-item" @click="pickSample(s)">
+              <component :is="icon('FilePlus2')" :size="14" />
+              <span class="sp-name">{{ s }}</span>
+            </button>
+          </template>
+          <div v-else class="sp-empty">No samples available</div>
+        </div>
+      </div>
       <button class="icon-btn" title="Open file" @click="openFilePicker">
         <component :is="icon('FolderOpen')" :size="16" />
       </button>
@@ -229,6 +289,9 @@ g.__focusOmnibox = beginEdit
     </div>
 
     <div class="toolbar-group">
+      <button class="icon-btn" title="About & help" @click="ui.openModal('about')">
+        <component :is="icon('CircleHelp')" :size="16" />
+      </button>
       <button class="icon-btn" :title="prefs.theme === 'dark' ? 'Light theme' : 'Dark theme'" @click="prefs.toggleTheme()">
         <component :is="icon(prefs.theme === 'dark' ? 'Sun' : 'Moon')" :size="16" />
       </button>
@@ -299,5 +362,65 @@ g.__focusOmnibox = beginEdit
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sample-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.sample-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 80;
+  min-width: 230px;
+  max-width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-lg);
+  padding: 5px;
+  animation: pop-in 110ms var(--ease);
+}
+.sp-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-3);
+  padding: 6px 10px 3px;
+  font-weight: 700;
+}
+.sp-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.sp-item:hover {
+  background: var(--accent-soft);
+}
+.sp-item:disabled {
+  opacity: 0.5;
+}
+.sp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-empty {
+  padding: 12px;
+  color: var(--text-3);
+  text-align: center;
+  font-size: 12px;
 }
 </style>

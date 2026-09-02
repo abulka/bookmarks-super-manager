@@ -6,6 +6,7 @@ import { useUi } from './state/ui'
 import { useClipboard } from './state/clipboard'
 import { useIcon } from './lib/icons'
 import { groupByParent, indexTree } from './lib/tree'
+import { loadSampleNames, fetchSampleText } from './lib/samples'
 import type { BookmarkDoc } from './types'
 import TabStrip from './components/chrome/TabStrip.vue'
 import Toolbar from './components/chrome/Toolbar.vue'
@@ -200,18 +201,12 @@ const loadingSamples = ref(false)
 async function loadSamples(): Promise<void> {
   if (loadingSamples.value) return
   loadingSamples.value = true
-  try {
-    const idx = await fetch('/samples/index.json', { signal: AbortSignal.timeout(4000) })
-    if (idx.ok) samples.value = (await idx.json()) as string[]
-  } catch {
-    samples.value = []
-  }
+  samples.value = await loadSampleNames()
   loadingSamples.value = false
 }
 async function openSample(name: string): Promise<void> {
-  const res = await fetch(`/samples/${encodeURIComponent(name)}`)
-  if (!res.ok) return
-  const text = await res.text()
+  const text = await fetchSampleText(name)
+  if (text == null) return
   const id = docs.openFromText(text, name)
   if (id) ui.notify('success', `Opened ${name}`)
 }
