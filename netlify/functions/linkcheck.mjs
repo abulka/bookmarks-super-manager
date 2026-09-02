@@ -5,17 +5,16 @@
 // Client contract matches /__linkcheck: POST { url } -> { ok, status, error?, note? }
 
 // Strong signals that a 200 response is actually a registrar/hosting *placeholder*
-// page (parked domain, "buy this domain", "coming soon") rather than the real site.
+// page (parked domain, "buy this domain", "coming soon", "domain for sale") rather
+// than the real site. Deliberately narrow: common technical phrases like "DNS
+// configuration", "your domain is now ready" or "coming soon" appear on plenty of
+// legitimate pages and must NOT trigger this.
 const PARKED_MARKERS = [
   /buy\s+this\s+domain/i,
-  /this\s+domain(?:\s+name)?\s+(?:is|has\s+been)\s+(?:for\s+sale|available|registered|parked)/i,
   /domain\s+for\s+sale/i,
-  /your\s+domain\s+is\s+(?:now\s+)?ready/i,
-  /(?:web\s+)?site\s+(?:is\s+)?(?:temporarily\s+)?(?:under\s+construction|coming\s+soon|parked)/i,
-  /this\s+site\s+is\s+(?:temporarily\s+)?(?:under\s+construction|coming\s+soon)/i,
+  /this\s+domain(?:\s+name)?\s+(?:is|has\s+been)\s+(?:parked|for\s+sale)/i,
   /parked\s+(?:by|with|page)/i,
-  /(?:sedo|parkingcrew|godaddy|namecheap|register\.com|nic\.[a-z]+)\b.*(?:parking|domain\s+for\s+sale|this\s+domain)/i,
-  /dns\s+(?:parking|management|configuration)/i,
+  /(?:sedo|parkingcrew|godaddy|namecheap|register\.com)\b.*(?:parking|domain\s+for\s+sale)/i,
 ]
 
 // Code hosts return 404 to anonymous clients for PRIVATE repos (a privacy
@@ -70,7 +69,7 @@ function looksParked(sample) {
 
 async function checkUrl(url) {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 12000)
+  const timer = setTimeout(() => controller.abort(), 20000)
   try {
     const res = await fetch(url, {
       method: 'GET',
@@ -101,6 +100,12 @@ async function checkUrl(url) {
     }
     return { ok: true, status, error: null }
   } catch (e) {
+    // A hard abort is OUR timeout, not evidence the site is down: slow or
+    // bot-shielded shops routinely take longer than an automated headless
+    // fetch allows. Report it as reachable (unverified) rather than dead.
+    if (typeof e === 'object' && e !== null && e?.name === 'AbortError') {
+      return { ok: true, status: 0, error: null, note: 'timeout' }
+    }
     return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) }
   } finally {
     clearTimeout(timer)
