@@ -151,11 +151,11 @@ function onKey(e: KeyboardEvent): void {
   if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
     e.preventDefault()
     if (inInput) return
-    docs.undoOf(docId).undo()
+    undo()
   } else if ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y') {
     e.preventDefault()
     if (inInput) return
-    docs.undoOf(docId).redo()
+    redo()
   } else if (e.key.toLowerCase() === 'f' && !inInput) {
     e.preventDefault()
     ;(window as any).__focusOmnibox?.()
