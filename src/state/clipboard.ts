@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { useDocs } from './docs'
+import { useUi } from './ui'
 import { findNode, indexTree, isDescendant, namePath } from '../lib/tree'
+import { applyRemove, restoreRemove } from '../lib/mutations'
 
 export type ClipMode = 'cut' | 'copy'
 
@@ -8,6 +10,20 @@ export type ClipMode = 'cut' | 'copy'
 export interface TransferGroup {
   parentId: string
   ids: string[]
+}
+
+/**
+ * A just-performed same-file *copy* paste. The UI uses this to offer a
+ * one-click conversion: the pasted clones are removed and the originals are
+ * moved into the target folder instead (i.e. "undo the duplicate, move the
+ * originals"). `groups` are the resolved source parents of the copy.
+ */
+export interface LastCopyPaste {
+  tgtDocId: string
+  tgtFolderId: string
+  groups: TransferGroup[]
+  /** the fresh ids this paste inserted into tgtFolderId */
+  cloneIds: string[]
 }
 
 /**
@@ -24,6 +40,7 @@ export const useClipboard = defineStore('clipboard', {
     srcDocId: null as string | null,
     groups: [] as TransferGroup[],
     mode: 'cut' as ClipMode,
+    lastPaste: null as LastCopyPaste | null,
   }),
   getters: {
     has(state): boolean {
@@ -73,11 +90,13 @@ export const useClipboard = defineStore('clipboard', {
       this.srcDocId = docId
       this.groups = clean.map((g) => ({ parentId: g.parentId, ids: [...g.ids] }))
       this.mode = mode
+      this.lastPaste = null
       console.debug(`[clipboard] ${mode} ${this.ids.length} from ${clean.length} parent(s) (${docId})`)
     },
     clear(): void {
       this.srcDocId = null
       this.groups = []
+      this.lastPaste = null
     },
     /** capture the currently selected items of a doc's visible folder for a move; returns the count */
     cutSelection(docId: string): number {
@@ -156,6 +175,8 @@ export const useClipboard = defineStore('clipboard', {
       console.debug(`[clipboard] paste ${this.mode} ${allIds.length} → ${tgtDocId}/${folderId} anchor:${anchor ?? 'end'}`)
 
       const u = docs.undoOf(tgtDocId)
+      const sameDocCopy = this.mode === 'copy' && this.srcDocId === tgtDocId
+      let record: LastCopyPaste | null = null
       if (this.mode === 'cut' && this.srcDocId === tgtDocId) {
         // fast in-document move (keeps original ids)
         u.group('Move', () => {
@@ -166,12 +187,87 @@ export const useClipboard = defineStore('clipboard', {
           for (const g of groups) docs.cutInto(this.srcDocId!, g.parentId, g.ids, tgtDocId, folderId, anchor)
         })
       } else {
+        // a copy that lands back in its own file duplicates — record it so the
+        // UI can offer to convert the paste into a move instead
+        const beforeIds = new Set(tgt.children.map((c) => c.id))
         u.group('Paste', () => {
           for (const g of groups) docs.copyInto(this.srcDocId!, g.parentId, g.ids, tgtDocId, folderId, anchor)
         })
+        if (sameDocCopy) {
+          const cloneIds = tgt.children.filter((c) => !beforeIds.has(c.id)).map((c) => c.id)
+          if (cloneIds.length) {
+            record = {
+              tgtDocId,
+              tgtFolderId: folderId,
+              groups: groups.map((g) => ({ parentId: g.parentId, ids: [...g.ids] })),
+              cloneIds,
+            }
+          }
+        }
       }
       this.clear()
+      if (record) {
+        this.lastPaste = record
+        useUi().notify(
+          'info',
+          `Duplicated ${record.cloneIds.length} item${record.cloneIds.length === 1 ? '' : 's'} in this file — move the originals instead?`,
+          { label: 'Move instead', onClick: () => void this.convertCopyPasteToMove() },
+          12000
+        )
+      }
       return allIds.length
+    },
+
+    /**
+     * Turn the last same-file copy paste into a move: the pasted clones are
+     * removed and the originals are relocated into the target folder. The
+     * pending 'Paste' step is consumed first so the whole paste-then-correct
+     * sequence collapses into ONE undo step — undoing it lands straight back
+     * on the pre-paste state, with no leftover duplicate.
+     * Returns the number of clones converted (0 when no record).
+     */
+    convertCopyPasteToMove(): number {
+      const rec = this.lastPaste
+      if (!rec) return 0
+      const docs = useDocs()
+      const doc = docs.byId(rec.tgtDocId)
+      if (!doc) {
+        this.lastPaste = null
+        return 0
+      }
+      const tgt = findNode(doc.root, rec.tgtFolderId)
+      if (!tgt) {
+        this.lastPaste = null
+        return 0
+      }
+      const n = rec.cloneIds.length
+      const u = docs.undoOf(rec.tgtDocId)
+      // The 'Paste' step that created the clones is the top of the stack.
+      // Undoing it puts the originals back in their source — exactly the
+      // state before the paste — so the correction below needs no leftover
+      // cleanup on its own undo. (If anything else sits on top, keep the old
+      // explicit-clone-removal fallback so we never undo the wrong step.)
+      const consumed = u.undoLabel === 'Paste'
+      if (consumed) u.undo()
+
+      u.group('Move instead', () => {
+        if (!consumed && n) {
+          const captured = applyRemove(tgt, rec.cloneIds)
+          u.push({
+            label: 'Remove duplicates',
+            undo: () => restoreRemove(tgt, captured),
+            redo: () => applyRemove(tgt, rec.cloneIds),
+          })
+        }
+        for (const g of rec.groups) {
+          if (g.parentId === rec.tgtFolderId) continue
+          const src = findNode(doc.root, g.parentId)
+          if (!src || src.type !== 'folder') continue
+          docs.mutMove(rec.tgtDocId, g.parentId, g.ids, rec.tgtFolderId, null)
+        }
+      })
+      this.lastPaste = null
+      return n
     },
   },
 })

@@ -236,6 +236,58 @@ it('same-doc copy duplicates in place with fresh ids', () => {
   expect(f1.children[3].name).toBe('A')
 })
 
+it('same-doc copy paste duplicates and records lastPaste for conversion', () => {
+  const clip = useClipboard()
+  const docs = useDocs()
+  const d = docs.byId(docId)!
+  const f1 = findNode(d.root, 'f1')!
+  clip.capture(docId, ['a', 'b'], f1.id, 'copy')
+  d.currentFolderId = 'f2'
+  expect(clip.pasteInto(docId, 'f2', null)).toBe(2)
+  // the paste duplicated → recorded so the UI can offer "move instead"
+  expect(clip.lastPaste).not.toBeNull()
+  expect(clip.lastPaste!.cloneIds.length).toBe(2)
+  for (const id of clip.lastPaste!.cloneIds) {
+    expect(id).not.toBe('a')
+    expect(id).not.toBe('b')
+  }
+  expect(findNode(d.root, 'f2')!.children.length).toBe(2)
+  expect(f1.children.map((c) => c.id)).toEqual(['a', 'b', 'c'])
+})
+
+it('convertCopyPasteToMove removes the clones and moves the originals; one undo returns to pre-paste', () => {
+  const clip = useClipboard()
+  const docs = useDocs()
+  const d = docs.byId(docId)!
+  const f1 = findNode(d.root, 'f1')!
+  clip.capture(docId, ['a', 'b'], f1.id, 'copy')
+  expect(clip.pasteInto(docId, 'f2', null)).toBe(2)
+  expect(clip.lastPaste).not.toBeNull()
+
+  expect(clip.convertCopyPasteToMove()).toBe(2)
+  expect(clip.lastPaste).toBeNull()
+  // clones gone, originals relocated
+  expect(findNode(d.root, 'f2')!.children.map((c) => c.id)).toEqual(['a', 'b'])
+  expect(f1.children.map((c) => c.id)).toEqual(['c'])
+  // the paste step was consumed, so the only undo step is the correction —
+  // one undo lands straight back on the pre-paste state, no leftover copy
+  const u = docs.undoOf(docId)
+  expect(u.canUndo).toBe(true)
+  u.undo()
+  expect(findNode(d.root, 'f2')!.children).toEqual([])
+  expect(f1.children.map((c) => c.id)).toEqual(['a', 'b', 'c'])
+  expect(u.canUndo).toBe(false)
+})
+
+it('cross-doc copy paste leaves no lastPaste record (no same-file duplication)', () => {
+  const clip = useClipboard()
+  const docs = useDocs()
+  const f1 = findNode(docs.byId(docId)!.root, 'f1')!
+  clip.capture(docId, ['a'], f1.id, 'copy')
+  expect(clip.pasteInto(doc2Id, 'arch', null)).toBe(1)
+  expect(clip.lastPaste).toBeNull()
+})
+
 // ---------------- grouped (multi-parent tree transfers) ----------------
 
 it('grouped capture: same-doc cut across parents stays one undo step', () => {
