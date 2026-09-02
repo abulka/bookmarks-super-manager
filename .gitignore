@@ -28,3 +28,6 @@ public/samples/*
 *.sln
 *.sw?
 .playwright-mcp/
+
+# Local Netlify folder
+.netlify
