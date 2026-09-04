@@ -68,17 +68,8 @@ export function nodeFromPlain(c: ChromePlain): BmNode {
 
 /** Whole chrome tree → the live doc's root: hidden '0' becomes the synthetic doc root. */
 export function chromeRootToNode(root: ChromePlain): BmNode {
-  // Chrome's top-level "Mobile bookmarks" section is sync bookkeeping that
-  // just clutters the tree — hide it from the live doc (it stays in Chrome,
-  // and top-level roots are never deleted by Apply). Filtering here (not the
-  // view) keeps the model faithful everywhere else.
-  const kids = (root.children ?? []).filter((c) => !isMobileBookmarksSection(c)).map(nodeFromPlain)
+  const kids = (root.children ?? []).map(nodeFromPlain)
   return { id: ROOT_ID, type: 'folder', name: '(root)', children: kids }
-}
-
-/** Chrome's permanent top-level "Mobile bookmarks" sync folder. */
-function isMobileBookmarksSection(n: ChromePlain): boolean {
-  return n.title?.toLowerCase() === 'mobile bookmarks'
 }
 
 /** Structural equality (ids, order, titles, urls — deliberately ignoring dates). */

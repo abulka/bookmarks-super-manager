@@ -5,7 +5,7 @@ import { useDnd } from '../../state/dnd'
 import { useClipboard, type TransferGroup } from '../../state/clipboard'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
-import { groupByParent, indexTree, folderCounts, namePath, toolbarFolder, topmostIds } from '../../lib/tree'
+import { groupByParent, indexTree, folderCounts, namePath, toolbarFolder, mobileFolder, otherFolder, topmostIds } from '../../lib/tree'
 import { matchQuery, tokenizeQuery } from '../../lib/search'
 import { prepareDrag } from '../../lib/drag'
 import { confirmDelete } from '../../lib/confirmDelete'
@@ -105,6 +105,11 @@ const rows = computed<Row[]>(() => {
 
   if (!tokens.length) {
     const bar = toolbarFolder(d.root)
+    const mobile = mobileFolder(d.root)
+    // Chrome's real top-level "Other bookmarks" folder is the file/mirror of the
+    // virtual "All bookmarks" section — flatten it so it isn't nested inside the
+    // section it already represents (bar / other / mobile stay three siblings).
+    const otherTop = otherFolder(d.root)
     const walk = (n: BmNode, depth: number): void => {
       for (const c of n.children) {
         if (c.type !== 'folder') continue
@@ -117,15 +122,29 @@ const rows = computed<Row[]>(() => {
       out.push({ node: bar, depth: 0, match: false, expanded: !collapsed[bar.id] })
       if (!collapsed[bar.id]) walk(bar, 1)
     }
-    // section 2: "All bookmarks" = everything except the bar
+    // section 2: "All bookmarks" = everything except the bar and mobile
     out.push({ node: d.root, depth: 0, match: false, expanded: !collapsed[d.root.id], isRoot: true, label: 'Other bookmarks' })
     if (!collapsed[d.root.id]) {
       for (const c of d.root.children) {
         if (c.type !== 'folder') continue
         if (bar && c.id === bar.id) continue
+        if (mobile && c.id === mobile.id) continue
+        if (otherTop && c.id === otherTop.id) {
+          for (const sc of otherTop.children) {
+            if (sc.type !== 'folder') continue
+            out.push({ node: sc, depth: 1, match: false, expanded: !collapsed[sc.id] })
+            if (!collapsed[sc.id]) walk(sc, 2)
+          }
+          continue
+        }
         out.push({ node: c, depth: 1, match: false, expanded: !collapsed[c.id] })
         if (!collapsed[c.id]) walk(c, 2)
       }
+    }
+    // section 3: "Mobile bookmarks" (its own root, sibling of "All bookmarks")
+    if (mobile) {
+      out.push({ node: mobile, depth: 0, match: false, expanded: !collapsed[mobile.id] })
+      if (!collapsed[mobile.id]) walk(mobile, 1)
     }
     return out
   }
@@ -168,14 +187,15 @@ const counts = computed(() => {
 function selectFolder(id: string): void {
   docs.setCurrentFolder(props.docId, id)
 }
-/** counts for a row, excluding the bar subtree from the "All bookmarks" root */
+/** counts for a row, excluding the bar & mobile subtrees from the "All bookmarks" root */
 function rowCount(r: Row): number {
   const d = doc.value
   if (!d) return 0
   if (!r.isRoot) return counts.value.get(r.node.id)?.links ?? 0
   const total = counts.value.get(d.root.id)?.links ?? 0
   const bar = toolbarFolder(d.root)
-  return bar ? total - (counts.value.get(bar.id)?.links ?? 0) : total
+  const mobile = mobileFolder(d.root)
+  return total - (bar ? counts.value.get(bar.id)?.links ?? 0 : 0) - (mobile ? counts.value.get(mobile.id)?.links ?? 0 : 0)
 }
 function rowDeadCount(r: Row): number {
   const d = doc.value
@@ -183,7 +203,8 @@ function rowDeadCount(r: Row): number {
   if (!r.isRoot) return counts.value.get(r.node.id)?.dead ?? 0
   const total = counts.value.get(d.root.id)?.dead ?? 0
   const bar = toolbarFolder(d.root)
-  return bar ? total - (counts.value.get(bar.id)?.dead ?? 0) : total
+  const mobile = mobileFolder(d.root)
+  return total - (bar ? counts.value.get(bar.id)?.dead ?? 0 : 0) - (mobile ? counts.value.get(mobile.id)?.dead ?? 0 : 0)
 }
 function toggle(n: BmNode): void {
   if (n.type !== 'folder') return

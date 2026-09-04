@@ -331,7 +331,7 @@ describe('chrome → app mapping', () => {
     expect(root.children.map((c) => c.id)).toEqual(['1', '2'])
   })
 
-  it('chromeRootToNode hides the top-level "Mobile bookmarks" sync folder', () => {
+  it('chromeRootToNode keeps the top-level "Mobile bookmarks" sync folder', () => {
     const root = chromeRootToNode(
       plainFolder('0', '', [
         plainFolder('1', 'Bookmarks bar', []),
@@ -339,8 +339,9 @@ describe('chrome → app mapping', () => {
         plainFolder('3', 'Mobile bookmarks', [plainLink('30', 'Phone note', 'https://m')]),
       ]),
     )
-    expect(root.children.map((c) => c.id)).toEqual(['1', '2'])
-    expect(root.children.some((c) => c.name === 'Mobile bookmarks')).toBe(false)
+    expect(root.children.map((c) => c.id)).toEqual(['1', '2', '3'])
+    const mobile = root.children.find((c) => c.name === 'Mobile bookmarks')
+    expect(mobile?.children[0]?.name).toBe('Phone note')
   })
 
   it('plainEquals compares structure and ignores dates', () => {

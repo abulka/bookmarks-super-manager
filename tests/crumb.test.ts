@@ -68,3 +68,12 @@ it('a document without a toolbar folder wraps everything in "Other bookmarks"', 
     { id: 'mail', name: 'Mail' },
   ])
 })
+
+it('mobile bookmarks folders keep the real path, not the virtual "Other bookmarks" section', () => {
+  const root: BmNode = { id: 'root', type: 'folder', name: '(root)', addDate: t, children: [folder('Mobile bookmarks', 'mob', [folder('Ph', 'ph')])] }
+  expect(crumbPath(root, 'mob')).toEqual([{ id: 'mob', name: 'Mobile bookmarks' }])
+  expect(crumbPath(root, 'ph')).toEqual([
+    { id: 'mob', name: 'Mobile bookmarks' },
+    { id: 'ph', name: 'Ph' },
+  ])
+})

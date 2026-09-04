@@ -35,6 +35,7 @@ beforeAll(() => {
   root.children.push(mk('F1', 'f1'))
   root.children.push(mk('F2', 'f2'))
   root.children.push(mkL('L1', 'l1'))
+  root.children.push(mk('Mobile bookmarks', 'mob', [mk('Phone', 'ph')]))
   const id = 'docsec'
   docs.docs.push({
     id,
@@ -102,6 +103,29 @@ it('the "All bookmarks" list view hides the bookmarks bar folder', async () => {
   const header = document.querySelector('.cl-title')?.textContent ?? ''
   expect(header).toContain('Other bookmarks')
   expect(header).not.toContain('(root)')
+})
+
+it('tree renders a third "Mobile bookmarks" section, after All bookmarks', async () => {
+  const docs = useDocs()
+  docs.byId(docId)!.collapsed = {} // earlier tests collapse the "Other bookmarks" section
+  wrapper = mount(ManagerView, { props: { docId }, attachTo: document.body })
+  await settle()
+  const r = rows()
+  // bar(0) Bar Fold(1) Other bookmarks(2) F1(3) F2(4) then mobile(5) and its child
+  expect(r[5]!.textContent).toContain('Mobile bookmarks')
+  expect(r[5]!.getAttribute('data-dropid')).toBe('mob')
+  expect(r[6]!.textContent).toContain('Phone')
+  // mobile is never rendered as a child of All bookmarks
+  expect(r.some((el) => el.textContent?.includes('Mobile bookmarks') && el.getAttribute('data-dropid') !== 'mob')).toBe(false)
+})
+
+it('the "All bookmarks" list view hides the mobile bookmarks folder', async () => {
+  wrapper = mount(ManagerView, { props: { docId }, attachTo: document.body })
+  const docs = useDocs()
+  docs.setCurrentFolder(docId, rootId)
+  await settle()
+  const names = Array.from(document.querySelectorAll('.bm-row')).map((el) => el.textContent ?? '')
+  expect(names.some((s) => s.includes('Mobile bookmarks'))).toBe(false)
 })
 
 it('⌘-click after a plain click keeps the anchor in the multi-selection (no n−1 copy)', async () => {

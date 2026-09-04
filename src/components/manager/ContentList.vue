@@ -5,7 +5,7 @@ import { useDnd } from '../../state/dnd'
 import { useClipboard } from '../../state/clipboard'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
-import { findNode, namePath, toolbarFolder } from '../../lib/tree'
+import { findNode, namePath, toolbarFolder, mobileFolder, otherFolder } from '../../lib/tree'
 import { formatDate } from '../../lib/date'
 import { hostOf } from '../../lib/url'
 import { prepareDrag } from '../../lib/drag'
@@ -28,14 +28,30 @@ const folder = computed(() => {
   const d = doc.value
   return d ? findNode(d.root, d.currentFolderId) : null
 })
-/** the "All bookmarks" view is the root minus the bar (the bar is its own root) */
+/** the "All bookmarks" view is the root minus the bar & mobile (each is its own root) */
 const isRootView = computed(() => !!doc.value && folder.value?.id === doc.value!.root.id)
 const children = computed(() => {
   docs.treeVersion
   const kids = folder.value?.children ?? []
   if (isRootView.value) {
-    const bar = toolbarFolder(doc.value!.root)
-    return bar ? kids.filter((c) => c.id !== bar.id) : kids
+    const root = doc.value!.root
+    const bar = toolbarFolder(root)
+    const mobile = mobileFolder(root)
+    // Chrome's real top-level "Other bookmarks" folder mirrors this very view —
+    // flatten its children in place so it isn't a redundant "Other bookmarks"
+    // row inside the "All bookmarks" list.
+    const otherTop = otherFolder(root)
+    const out: BmNode[] = []
+    for (const c of kids) {
+      if (bar && c.id === bar.id) continue
+      if (mobile && c.id === mobile.id) continue
+      if (otherTop && c.id === otherTop.id) {
+        out.push(...otherTop.children)
+        continue
+      }
+      out.push(c)
+    }
+    return out
   }
   return kids
 })

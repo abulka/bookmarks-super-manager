@@ -80,16 +80,19 @@ export interface Crumb {
 
 /**
  * Visible path from the top-level section down to `id`, mirroring the tree:
- * folders under the bookmarks bar show `Bookmarks bar › …`; everything else
- * gets the virtual "Other bookmarks" section prepended. Root itself → [].
+ * folders under the bookmarks bar show `Bookmarks bar › …`; mobile shows
+ * `Mobile bookmarks › …`; everything else gets the virtual "Other bookmarks"
+ * section prepended. Root itself → [].
  */
 export function crumbPath(root: BmNode, id: string): Crumb[] {
   root = raw(root)
   const path = nodePath(root, id).map((n) => ({ id: n.id, name: n.name }))
   if (!path.length) return []
   const bar = toolbarFolder(root)
+  const mobile = mobileFolder(root)
   const top = path[0]!
   if (bar && top.id === bar.id) return path
+  if (mobile && top.id === mobile.id) return path
   // the virtual section label is "Other bookmarks" — don't prepend it over a
   // real top-level folder that is already named "Other bookmarks" (that would
   // render a redundant "Other bookmarks › Other bookmarks")
@@ -228,6 +231,27 @@ export function flattenTree(root: BmNode, collapsed: Record<string, boolean>): B
 export function toolbarFolder(root: BmNode): BmNode | null {
   root = raw(root)
   return root.children.find((c) => c.type === 'folder' && (c.attrs?.PERSONAL_TOOLBAR_FOLDER === 'true' || c.name.toLowerCase().includes('bookmarks bar'))) ?? null
+}
+
+/**
+ * The top-level "Mobile bookmarks" folder, if the data has one. Chrome's sync
+ * section keeps phone-synced bookmarks; it is its own root in the tree, just
+ * like the bookmarks bar.
+ */
+export function mobileFolder(root: BmNode): BmNode | null {
+  root = raw(root)
+  return root.children.find((c) => c.type === 'folder' && c.name.toLowerCase() === 'mobile bookmarks') ?? null
+}
+
+/**
+ * Chrome's real top-level "Other bookmarks" folder, if one exists. The app's
+ * virtual "All bookmarks" section renders its contents (Chrome mirrors one into
+ * the other), so the folder itself must never appear nested inside that section.
+ */
+export function otherFolder(root: BmNode): BmNode | null {
+  root = raw(root)
+  const bar = toolbarFolder(root)
+  return root.children.find((c) => c.type === 'folder' && c.name.toLowerCase() === 'other bookmarks' && c.id !== bar?.id) ?? null
 }
 
 export function isDescendant(root: BmNode, ancestorId: string, id: string): boolean {
