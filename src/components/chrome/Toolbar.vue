@@ -235,8 +235,12 @@ async function reloadFromChrome(d: BookmarkDoc, confirmFirst: boolean): Promise<
 
 async function apply(d: BookmarkDoc, backend: ReturnType<typeof chromeBackend>, summary: string): Promise<void> {
   const r = await applyToChrome(d, backend)
+  // Always re-baseline after an attempt, success or failure. Without this, the
+  // ops this Apply already wrote to Chrome look like "external changes" to the
+  // watcher (baseline is stale), and the user gets told Chrome changed outside
+  // the tab when all that changed was the tab's own partially-applied edits.
+  setBaseline(d.id, r.tree)
   if (r.ok) {
-    setBaseline(d.id, r.tree)
     docs.markExported(d.id)
     docs.bump()
     ui.notify('success', `Applied to Chrome: ${summary}`)
@@ -244,7 +248,7 @@ async function apply(d: BookmarkDoc, backend: ReturnType<typeof chromeBackend>, 
     const n = r.failures.length
     ui.notify(
       'error',
-      `Applied with ${n} failure${n === 1 ? '' : 's'}. Chrome and this tab still differ — nothing was lost: the tab stays dirty, and pressing Apply to Chrome again re-diffs and retries only what is missing.`,
+      `Applied to Chrome with ${r.applied} of ${r.applied + n} change${r.applied + n === 1 ? '' : 's'}, ${n} failed — Chrome now reflects only what applied. Nothing else is lost: the tab keeps its edits, and Apply again re-diffs and retries just the remaining changes.`,
       undefined,
       0,
     )

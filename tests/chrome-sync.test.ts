@@ -213,6 +213,92 @@ describe('diffTrees', () => {
   })
 })
 
+describe('diffTrees — moving items is a move, not delete+trace-create (regression)', () => {
+
+
+  it('an item moved to another folder in the local tree must never be deleted', () => {
+    // chrome: bar = [F, L1, L2]
+    const ch = plainFolder('0', '', [
+      plainFolder(barId, 'Bookmarks bar', [
+        plainFolder('20', 'F', []),
+        plainLink('10', 'L1', 'https://a'),
+        plainLink('11', 'L2', 'https://b'),
+      ]),
+      plainFolder('2', 'Other bookmarks', []),
+    ])
+    // local: L1 and L2 were dragged INTO F
+    const local = localRoot([
+      folder(barId, 'Bookmarks bar', [folder('20', 'F', [link('10', 'L1', 'https://a'), link('11', 'L2', 'https://b')])]),
+      folder('2', 'Other bookmarks'),
+    ])
+    const ops = diffTrees(local, ch)
+    expect(ops.some((o) => o.kind === 'delete')).toBe(false)
+    const moves = ops.filter((o) => o.kind === 'move')
+    expect(moves).toHaveLength(2)
+    expect(moves.map((m) => m.id).sort()).toEqual(['10', '11'])
+    expect(moves.every((m) => m.parentId === '20')).toBe(true)
+  })
+
+  it('a whole folder dragged into another folder stays a move too', () => {
+    const ch = plainFolder('0', '', [
+      plainFolder(barId, 'Bookmarks bar', [plainFolder('20', 'Inner', []), plainFolder('30', 'Outer', [])]),
+      plainFolder('2', 'Other bookmarks', []),
+    ])
+    // local: Inner was dragged inside Outer, and Outer sits first
+    const local = localRoot([
+      folder(barId, 'Bookmarks bar', [folder('30', 'Outer', [folder('20', 'Inner', [])])]),
+      folder('2', 'Other bookmarks'),
+    ])
+    const ops = diffTrees(local, ch)
+    expect(ops.some((o) => o.kind === 'delete')).toBe(false)
+    const moveIds = ops.filter((o) => o.kind === 'move').map((m) => m.id)
+    expect(moveIds).toContain('20')
+    expect(moveIds).toContain('30')
+  })
+
+  it('truly deleted items still produce deletes (moved-away tracking must not suppress them)', () => {
+    const ch = plainFolder('0', '', [
+      plainFolder(barId, 'Bookmarks bar', [plainLink('10', 'L1', 'https://a'), plainLink('11', 'L2', 'https://b')]),
+      plainFolder('2', 'Other bookmarks', []),
+    ])
+    const local = localRoot([folder(barId, 'Bookmarks bar', [link('10', 'L1', 'https://a')]), folder('2', 'Other bookmarks')])
+    const ops = diffTrees(local, ch)
+    expect(ops).toContainEqual({ kind: 'delete', id: '11', folder: false })
+  })
+})
+
+describe('applyToChrome — move-into-new-folder converges without failures (regression)', () => {
+
+
+  it('dragging two links into a brand-new folder applies cleanly end-to-end', async () => {
+    const fake = new FakeChrome()
+    const L1 = await fake.create({ parentId: barId, title: 'L1', url: 'https://a', index: 0 })
+    const L2 = await fake.create({ parentId: barId, title: 'L2', url: 'https://b' })
+    const chromeTree = await fake.getTree()
+
+    // build the live doc exactly as the extension does, then perform the move
+    const root = chromeRootToNode(chromeTree)
+    const bar = root.children.find((c) => c.id === barId)!
+    const l1 = bar.children.find((c) => c.id === L1.id)!
+    const l2 = bar.children.find((c) => c.id === L2.id)!
+    const nf = folder('localf', 'New folder', [l1, l2])
+    bar.children = [nf, ...bar.children.filter((c) => c !== l1 && c !== l2)]
+
+    const doc = docWithRoot(root)
+    const r = await applyToChrome(doc, fake)
+    expect(r.ok).toBe(true)
+    expect(r.failures).toEqual([])
+
+    const tree = await fake.getTree()
+    const barOut = tree.children!.find((c) => c.id === barId)!
+    expect(barOut.children!.map((c) => c.title)).toEqual(['New folder'])
+    expect(barOut.children![0]!.children!.map((c) => c.title)).toEqual(['L1', 'L2'])
+    // created folder's real id was written back into the tree
+    expect(barOut.children![0]!.id).not.toBe('localf')
+    expect(diffTrees(doc.root, tree)).toEqual([])
+  })
+})
+
 describe('applyOps + applyToChrome round-trips against the fake backend', () => {
   it('executes creates/moves/renames/deletes to convergence, remapping created ids', async () => {
     const fake = new FakeChrome()

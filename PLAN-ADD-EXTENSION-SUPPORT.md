@@ -1,9 +1,38 @@
 # Plan: Add Chrome extension support ("Live Chrome" tab + batch Apply)
 
-Status: implemented (Phases 1–6 incl. distribution + self-update)
-2026-09-04 · Written 2026-09-02 · Reviewed 2026-09-03 (all claims verified
-against the codebase; amendments below) · Remaining: manual Apply pass on a
-throwaway profile, icons
+Status: implemented (Phases 1–6 incl. distribution + self-update; post-release
+sync-diff fix) 2026-09-04 · Written 2026-09-02 · Reviewed 2026-09-03 (all
+claims verified against the codebase; amendments below) · Remaining: manual
+Apply pass on a throwaway profile, icons
+
+## Post-fix (2026-09-04) — cross-parent moves were mis-diffed as delete+recreate
+
+Found live while dogfooding before release: dragging existing links into a
+**newly created folder** then Apply produced `Applied with 1 failure`, and the
+extension then falsely reported "The Chrome bookmarks were changed outside this
+tab". Two real bugs, both fixed and regression-tested:
+
+1. **`diffTrees` treated a cross-parent move as delete + re-recreate**
+   (`chromeSync.ts`). The delete-still-matching-id guard was *per-folder* only,
+   so an item dragged to a *different* parent was seen as "missing here" → a
+   `delete`, followed by `move` ops referencing the now-deleted ids → all those
+   moves failed. Fix: index the *entire* local tree (`localById`) and skip a
+   delete when the node (or anything in its subtree) still exists elsewhere
+   locally — it's a move; the placement pass emits a single `move`. True
+   deletes are unaffected. Bonus: a folder dragged into another folder is now
+   also a move, not delete+recreate. `maxPasses` raised 3 → 4 so cascading
+   relocations (a folder whose children were all moved out) converge in one
+   Apply.
+2. **Apply didn't re-baseline on partial failure** (`Toolbar.vue`). After a
+   failed run the baseline still described the pre-Apply tree, so the ops the
+   Apply *had* written to Chrome looked like "external changes" to the watcher
+   → the scary, wrong "Chrome changed outside this tab" toast. Now `apply()`
+   always `setBaseline(r.tree)`, success or failure, and the failure message
+   reports "applied X of Y, N failed" honestly instead of the old wording.
+
+Regression coverage: `tests/chrome-sync.test.ts` (move-not-delete ×2, true
+deletes still delete, and an end-to-end move-into-new-folder Apply that must
+converge with zero failures).
 
 ## Implemented (2026-09-03)
 

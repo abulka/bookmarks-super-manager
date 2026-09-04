@@ -69,16 +69,37 @@ export function diffTrees(localRoot: BmNode, chromeRoot: ChromePlain, protectTop
     if (i >= 0) list.splice(i, 1)
   }
 
+  // every id present anywhere in the local tree — used to tell a *move* from
+  // a *delete*: an item still living under a different parent locally was
+  // moved, not deleted, and must never be deleted out from under itself.
+  const localById = new Map<string, BmNode>()
+  const indexLocal = (n: BmNode): void => {
+    localById.set(n.id, n)
+    for (const c of n.children ?? []) indexLocal(c)
+  }
+  indexLocal(localRoot)
+
+  /** True when a chrome node (or anything in its subtree) still exists locally. */
+  const relocatedIntoLocalTree = (chromeId: string): boolean => {
+    if (localById.has(chromeId)) return true
+    const cn = chromeById.get(chromeId)
+    return !!cn?.children?.some((c) => relocatedIntoLocalTree(c.id))
+  }
+
   const visit = (local: BmNode, chromeId: string): void => {
     const localKids = local.children
     const localIds = new Set(localKids.map((c) => c.id))
 
-    // 1. deletes — chrome children missing locally
+    // 1. deletes — chrome children missing locally AND gone from the whole
+    //    local tree. Items that still exist locally under another parent are
+    //    moves, not deletions: skip them here and let the placement pass (3)
+    //    emit a single `move` instead. Subtree-relocations get the same grace.
     for (const cid of [...childrenOf(chromeId)]) {
       if (localIds.has(cid)) continue
       if (protectTopLevel && chromeId === chromeRoot.id) continue
       const cn = chromeById.get(cid)
       if (!cn) continue
+      if (relocatedIntoLocalTree(cid)) continue // moved elsewhere — delete later, if at all
       ops.push({ kind: 'delete', id: cid, folder: !!cn.children })
       detach(chromeId, cid)
     }
@@ -223,7 +244,7 @@ export async function applyOps(doc: BookmarkDoc, ops: SyncOp[], backend: ChromeB
  * `maxPasses` correction rounds. Returns ok only when chrome and the local
  * tree agree (or failures aborted the run — the doc stays dirty either way).
  */
-export async function applyToChrome(doc: BookmarkDoc, backend: ChromeBackend, maxPasses = 3): Promise<ApplyOutcome> {
+export async function applyToChrome(doc: BookmarkDoc, backend: ChromeBackend, maxPasses = 4): Promise<ApplyOutcome> {
   applying = true
   try {
     let applied = 0
