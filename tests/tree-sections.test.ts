@@ -157,3 +157,42 @@ it('a click-triggered menu (sort) stays open instead of closing on its own click
   const menu = document.querySelector('.context-menu')
   expect(menu).not.toBeNull()
 })
+
+it('double-clicking a tree search result clears the filter and reveals the item in place', async () => {
+  wrapper = mount(ManagerView, { props: { docId }, attachTo: document.body })
+  const docs = useDocs()
+  docs.byId(docId)!.collapsed = { bar: true } // collapse the bar so the reveal must re-expand it
+  await settle()
+  const search = document.querySelector('.tree-search input') as HTMLInputElement
+  search.value = 'Bar Fold'
+  search.dispatchEvent(new Event('input'))
+  await settle()
+  // filter mode shows the match
+  const match = rows().find((el) => el.getAttribute('data-dropid') === 'bf1')
+  expect(match).toBeTruthy()
+  fire(match!, 'dblclick')
+  await settle()
+  // the filter is cleared
+  expect(search.value).toBe('')
+  // the ancestor path was expanded again, so the folder is visible in the full tree
+  const revealed = rows().find((el) => el.getAttribute('data-dropid') === 'bf1')
+  expect(revealed).toBeTruthy()
+})
+
+it('clicking a link in tree search results does not navigate into it as a folder', async () => {
+  wrapper = mount(ManagerView, { props: { docId }, attachTo: document.body })
+  const docs = useDocs()
+  docs.setCurrentFolder(docId, 'f1')
+  await settle()
+  const search = document.querySelector('.tree-search input') as HTMLInputElement
+  search.value = 'L1'
+  search.dispatchEvent(new Event('input'))
+  await settle()
+  // a link row appears in the filtered tree
+  const linkRow = rows().find((el) => el.getAttribute('data-dropid') === 'l1')
+  expect(linkRow).toBeTruthy()
+  fire(linkRow!, 'click')
+  await settle()
+  // the current folder is untouched (no bogus empty folder in the list)
+  expect(docs.byId(docId)!.currentFolderId).toBe('f1')
+})

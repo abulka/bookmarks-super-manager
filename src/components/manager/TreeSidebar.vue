@@ -280,7 +280,19 @@ function onRowClick(e: MouseEvent, n: BmNode): void {
   }
   rangeAnchor.value = n.id
   setTreeSel([])
+  // links appear in tree search results — a click must not navigate into them
+  // as if they were folders (the list would render a bogus empty folder)
+  if (n.type !== 'folder') return
   selectFolder(n.id)
+}
+
+/** double-click on a tree row (esp. in search results): leave the filter and
+ *  reveal the item in its real location — expand the ancestor path and show it */
+function onRowDblClick(e: MouseEvent, n: BmNode): void {
+  const t = e.target as HTMLElement
+  if (t.closest('.tr-chev, button, input')) return
+  if (query.value) query.value = ''
+  revealInTree(n)
 }
 
 function onDragStartRow(e: MouseEvent, n: BmNode): void {
@@ -470,6 +482,7 @@ function pasteTree(): void {
         :data-drophover="rowDropHover(r.node, 'before') ? 'before' : rowDropHover(r.node, 'inside') ? 'inside' : rowDropHover(r.node, 'after') ? 'after' : undefined"
         :style="{ paddingLeft: r.depth * 14 + 6 + 'px' }"
         @click="onRowClick($event, r.node)"
+        @dblclick="onRowDblClick($event, r.node)"
         @contextmenu.prevent="onContextMenu($event, r.node)"
         @mousedown="onDragStartRow($event, r.node)"
       >
