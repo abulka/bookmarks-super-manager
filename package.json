@@ -2,6 +2,7 @@
   "name": "bookmark-super-manager",
   "version": "0.1.0",
   "type": "module",
+  "repository": "abulka/bookmarks-super-manager",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",

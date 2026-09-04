@@ -24,6 +24,7 @@ Promise.all([
   prefs.setTheme(prefs.theme)
   await docs.init()
   await wireChromeWatcher(docs)
+  import('./lib/updater').then((m) => m.startUpdateChecks())
 })
 
 /** External chrome.bookmarks changes → live rebuild or a keep-edits warning. */

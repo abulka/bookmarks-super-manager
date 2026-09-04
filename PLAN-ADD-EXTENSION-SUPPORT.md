@@ -1,9 +1,9 @@
 # Plan: Add Chrome extension support ("Live Chrome" tab + batch Apply)
 
-Status: implemented (Phases 1–4 + fake-API tests) 2026-09-03 · Written
-2026-09-02 · Reviewed 2026-09-03 (all claims verified against the codebase;
-amendments below) · Remaining: manual Apply pass on a throwaway profile, icons ·
-Future: Phase 6 (distribution)
+Status: implemented (Phases 1–6 incl. distribution + self-update)
+2026-09-04 · Written 2026-09-02 · Reviewed 2026-09-03 (all claims verified
+against the codebase; amendments below) · Remaining: manual Apply pass on a
+throwaway profile, icons
 
 ## Implemented (2026-09-03)
 
@@ -324,10 +324,33 @@ screenshot `spike/app-loaded.png`). Tooling notes:
   real profile until the sync logic is trusted. Deletes always require
   confirmation and the Apply summary is reviewable first — keep it that way.
 
-### Phase 6 — Distribution (future, not started)
+### Phase 6 — Distribution (implemented 2026-09-04)
 
-Current state: personal use = Load unpacked (see README); `dist-extension/` is
-gitignored build output. Options, in order of likely adoption:
+**Done:** the zip + sideload pipeline and the in-app self-update notifier.
+
+- **GitHub Actions** (`.github/workflows/release-extension.yml`): on any push
+  to `main`, if `package.json` version changed since the last release:
+  `npm run build:extension` → injects an `INSTALL.md` guide into
+  `dist-extension/` → zips the folder (manifest at zip root) → creates a
+  release `v<version>` with `git log` as the changelog. Doc-only pushes skip.
+- **Version baking:** `vite.extension.config.ts` now writes the version from
+  `package.json` into the copied `manifest.json` (previously hardcoded
+  0.1.0), and injects `__UPDATE_REPO__` (from the new `repository` field in
+  `package.json`) — the web build defines it as `''`.
+- **In-app updater** (`src/lib/updater.ts`): on startup + hourly, fetches
+  `api.github.com/repos/abulka/bookmarks-super-manager/releases/latest`; if
+  newer than `__APP_VERSION__`, shows a sticky toast with a **Get vX.Y.Z**
+  action that opens the release page (zip + notes). One nag per version
+  (seen-version kept in idb-keyval). Manual **Check for updates** in the
+  About dialog (`AboutDialog.vue`). gated: extension build only ✓
+  `isChromeExt()`. Tests: `tests/update.test.ts`
+  (`semverCompare`, `parseRelease`, `fetchLatestRelease`, disabled no-op).
+
+**Known boundary (read this before trusting it to update users):** silent
+auto-update is impossible for Load-unpacked/sideloaded extensions — this is a
+notifier, not a self-installer.
+
+The options below remain the menu for real adoption (ordered by likelihood):
 
 1. **Zip + sideload** (no fee, no store): zip `dist-extension/`, recipients
    unzip → Developer mode → Load unpacked. Works on macOS; Windows nags about

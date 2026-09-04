@@ -16,6 +16,8 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    // the web build has no update feed — only the extension build sets this
+    __UPDATE_REPO__: JSON.stringify(''),
   },
   test: {
     globals: true,

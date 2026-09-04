@@ -1,10 +1,28 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useIcon } from '../../../lib/icons'
+import { checkForUpdateNow, updaterEnabled } from '../../../lib/updater'
 
 defineEmits<{ close: [] }>()
 const icon = (name: string) => useIcon(name)
 
 const version = __APP_VERSION__
+const canCheck = updaterEnabled()
+const checking = ref(false)
+const checkNote = ref('')
+
+async function check() {
+  checking.value = true
+  checkNote.value = ''
+  const status = await checkForUpdateNow()
+  checkNote.value =
+    status === 'up-to-date'
+      ? 'You have the latest version.'
+      : status === 'error'
+        ? "Couldn't reach GitHub — check your connection and try again."
+        : ''
+  checking.value = false
+}
 </script>
 
 <template>
@@ -159,6 +177,10 @@ const version = __APP_VERSION__
     </div>
 
     <footer class="ab-foot">
+      <span v-if="checkNote" class="ab-checknote">{{ checkNote }}</span>
+      <button v-if="canCheck" class="btn-ghost" :disabled="checking" @click="check">
+        {{ checking ? 'Checking…' : 'Check for updates' }}
+      </button>
       <button class="btn-primary" @click="$emit('close')">Done</button>
     </footer>
   </div>
@@ -254,9 +276,35 @@ const version = __APP_VERSION__
 }
 .ab-foot {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
   padding: 12px 20px 16px;
   border-top: 1px solid var(--border);
+}
+.ab-checknote {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.btn-ghost {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .btn-primary {
   height: 32px;

@@ -1,0 +1,109 @@
+# Build the Chrome extension into a self-contained zip on every push to main
+# and publish it as a GitHub Release — but only when the package.json version
+# actually changed (doc-only pushes skip). The extension's in-app updater
+# reads this feed via api.github.com/repos/<owner>/<repo>/releases/latest.
+name: Release extension zip
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Check whether this version already has a release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v${VERSION} already exists — this push did not bump the version, skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Build the extension
+        if: steps.check.outputs.skip != 'true'
+        run: npm run build:extension
+
+      - name: Add the install guide to the package
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          cat > dist-extension/INSTALL.md <<'EOF'
+          # Bookmark Super Manager — install & update
+
+          This folder is the unpacked Chrome extension. To use it:
+
+          1. Open chrome://extensions
+          2. Toggle **Developer mode** (top right)
+          3. Click **Load unpacked** → choose this extracted folder
+          4. Click the extension toolbar icon → the manager opens your live Chrome bookmarks
+
+          ## To update to a newer version
+
+          1. Unzip the new release's zip **to its own folder** (do not reuse this old one)
+          2. chrome://extensions → **Remove** the old copy
+          3. **Load unpacked** → the new folder
+
+          Two things worth knowing:
+
+          - Chrome **references the folder on disk** (nothing is copied), so editing files
+            inside it and clicking the ↻ reload icon will not pick up changes — re-Load the
+            whole new folder as above.
+          - The extension id is derived from the folder's **absolute path**. Unpacking the
+            new zip over this folder keeps the id identical; extracting to a different path
+            makes Chrome treat it as a new extension (open files can be re-imported).
+
+          ## Permissions
+
+          - `bookmarks` — read and apply changes to your Chrome bookmarks
+          - `http://*/*` + `https://*/*` — so the dead-link checker can read real HTTP
+            status codes. All processing is local; nothing is uploaded anywhere.
+          EOF
+
+      - name: Package the zip (manifest at the zip root)
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          cd dist-extension
+          zip -qr "../bookmark-super-manager-v${{ steps.check.outputs.version }}.zip" .
+
+      - name: Create the release
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.check.outputs.version }}"
+          PREV="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || true)"
+          BODY="/tmp/notes.md"
+          {
+            echo "**Install:** download the zip, extract it anywhere, then in \`chrome://extensions\` toggle **Developer mode** → **Load unpacked** → the extracted folder. Full walkthrough + update steps are in \`INSTALL.md\` inside the zip."
+            echo
+            echo "**Update from an older release:** extract the new zip to its own folder, remove the old copy on \`chrome://extensions\`, and Load unpacked the new folder."
+            echo
+            echo "## Changes"
+            echo
+            if [ -n "$PREV" ]; then git log --oneline "$PREV..HEAD"; else git log --oneline; fi
+          } > "$BODY"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "v${{ steps.check.outputs.version }}" \
+            --notes-file "$BODY" "bookmark-super-manager-v${{ steps.check.outputs.version }}.zip"

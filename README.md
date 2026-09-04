@@ -144,6 +144,44 @@ Note: `--load-extension` on the command line is dead in branded Chrome (≥ M137
 silently ignores it — verified during the spike), but the **Load unpacked** UI
 works fine.
 
+### Installing from a GitHub release (no compile needed)
+
+Every push to `main` that bumps the version in `package.json` triggers an
+automated build on GitHub Actions that produces a ready-to-install zip and
+files it as a **GitHub Release**. To install it:
+
+1. Open the repo's **Releases** page (or pick it up via the in-app updater
+   below) and download the latest `bookmark-super-manager-vX.Y.Z.zip`
+2. Extract it anywhere — it contains `manifest.json` at its root plus the
+   bundled app and an `INSTALL.md` walkthrough
+3. `chrome://extensions` → **Developer mode** (top right) → **Load unpacked**
+   → the extracted folder
+
+The extension keeps a **copy of the folder path**, so to update to a newer
+release: unzip it to its own folder, remove the old copy on
+`chrome://extensions`, and Load unpacked the new folder.
+
+### Self-update check (the "cheeky bit")
+
+Because sideloaded extensions can't silently auto-update on branded Chrome
+(no `update_url` path outside the Web Store — Google red tape, fees and
+bureaucracy, exactly what I'm avoiding), the extension instead **checks for
+itself**:
+
+- On startup, and hourly while it's open, it asks
+  `api.github.com/repos/abulka/bookmarks-super-manager/releases/latest`
+- If a newer version exists it shows a **"Get vX.Y.Z"** notice → clicking it
+  opens the release page with the zip and notes
+- It only nags once per version, so re-opening the tab doesn't re-toast it
+- **About & help** → **Check for updates** runs it on demand
+
+Everything stays local; the only network call is this version check.
+
+> Why not silent? Load-unpacked extensions are a folder referenced by Chrome,
+> not a managed package. There is no legitimate way for one to replace itself,
+> so "self-update" means "notice + hand you the zip + tell you the two clicks"
+> rather than pretending otherwise.
+
 ### Updating the extension during development
 
 "Load unpacked" does not copy anything into the profile — Chrome **references
