@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useDocs } from '../../state/docs'
-import { flattenTree, indexTree } from '../../lib/tree'
-import { depthOf, parentOf } from '../../lib/treeNav'
+import { indexTree } from '../../lib/tree'
+import { depthOf } from '../../lib/treeNav'
 import { matchQuery, tokenizeQuery } from '../../lib/search'
 import { useIcon } from '../../lib/icons'
 import type { BmNode } from '../../types'
@@ -33,7 +33,7 @@ const expandSet = computed(() => {
   const tokens = tokenizeQuery(query.value)
   if (!tokens.length) return set
   const idx = indexIdx.value!
-  for (const n of flattenTree(d.root, d.collapsed)) {
+  for (const n of [...idx.byId.values()]) {
     if (matchQuery(tokens, n.name)) {
       let cur = idx.parentOf.get(n.id)
       while (cur && cur.id !== d.root.id) {
@@ -50,21 +50,26 @@ const nodes = computed(() => {
   const d = doc.value
   if (!d) return []
   const tokens = tokenizeQuery(query.value)
-  const parent = parentOf(d.root)
-  let list = flattenTree(d.root, d.collapsed)
+  const idx = indexIdx.value!
+  // every folder in the whole tree — collapse state must never hide a
+  // drop target or make a nested folder (e.g. inside "Other bookmarks")
+  // unsearchable
+  let list = [...idx.byId.values()].filter(
+    (n) => n.type === 'folder' && n.id !== d.root.id && n.id !== props.excludeId && (props.filter?.(n) ?? true),
+  )
   if (tokens.length) {
     const set = new Set<string>()
     for (const n of list) if (matchQuery(tokens, n.name)) set.add(n.id)
     for (const id of [...set]) {
-      let cur = parent.get(id)
-      while (cur && cur !== d.root.id) {
-        set.add(cur)
-        cur = parent.get(cur)
+      let cur = idx.parentOf.get(id)
+      while (cur && cur.id !== d.root.id) {
+        set.add(cur.id)
+        cur = idx.parentOf.get(cur.id)
       }
     }
     list = list.filter((n) => set.has(n.id))
   }
-  return list.filter((n) => n.type === 'folder' && n.id !== props.excludeId && (props.filter?.(n) ?? true))
+  return list
 })
 
 const depth = (id: string) => (doc.value ? depthOf(doc.value.root, id) : 0)
