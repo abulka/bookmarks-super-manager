@@ -543,7 +543,7 @@ onBeforeUnmount(() => {
           <component :is="icon('Network')" :size="15" />
         </button>
         <button class="icon-btn" title="Copy folder path" @click="copyFolderPath">
-          <component :is="icon('Clipboard')" :size="15" />
+          <component :is="icon('Folders')" :size="15" />
         </button>
         <button class="toolbar-btn" title="Select all" @click="selectAll">
           <component :is="icon('Check')" :size="14" /> Select all
@@ -647,6 +647,9 @@ onBeforeUnmount(() => {
             </button>
             <button class="icon-btn" title="Edit" @click.stop="startEdit(n, 'name')">
               <component :is="icon('Pencil')" :size="13" />
+            </button>
+            <button v-if="n.type === 'link'" class="icon-btn" title="Edit name & URL" @click.stop="ui.openModal('editNode', { docId, node: n })">
+              <component :is="icon('PencilSparkles')" :size="13" />
             </button>
             <button class="icon-btn danger" title="Delete" @click.stop="confirmDelete(doc.id, [n.id])">
               <component :is="icon('Trash2')" :size="13" />

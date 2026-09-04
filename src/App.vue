@@ -305,13 +305,13 @@ const viewComponent = computed(() => {
           </button>
         </span>
       <span class="spacer" />
-      <button class="icon-btn" title="Undo" :disabled="!undoStack?.canUndo" @click="undo">
+      <button class="icon-btn" title="Undo (⌘Z)" :disabled="!undoStack?.canUndo" @click="undo">
         <component :is="icon('Undo2')" :size="15" />
       </button>
-      <button class="icon-btn" title="Redo" :disabled="!undoStack?.canRedo" @click="redo">
-        <component :is="icon('RotateCcw')" :size="15" />
+      <button class="icon-btn" title="Redo (⇧⌘Z)" :disabled="!undoStack?.canRedo" @click="redo">
+        <component :is="icon('RotateCw')" :size="15" />
       </button>
-      <span class="kbd hint">⌘Z</span>
+      <span class="kbd hint">undo / redo</span>
     </div>
 
     <Toasts />
