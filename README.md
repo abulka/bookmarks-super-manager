@@ -96,6 +96,38 @@ load the bundled demo set (synthetic — no personal data).
 - `make samples` — (in the parent container) copy a campaign's real exports as
   samples for development (stays local; never committed)
 
+## Cutting a release
+
+Every push to `main` where the version in `package.json` **changed** triggers
+the [Release extension zip](.github/workflows/release-extension.yml) workflow —
+it builds the extension, zips it, and publishes **vX.Y.Z** as a GitHub Release
+(the in-app updater reads that same feed). Pushes that don't bump the version
+build nothing and create no release.
+
+So a release is just:
+
+1. Bump the version in `package.json`:
+   ```bash
+   npm version patch   # or minor / major
+   ```
+   (this also tags the commit — push the tag too, see below)
+2. Commit and push:
+   ```bash
+   git push && git push --tags
+   ```
+3. Watch the **Actions** tab — when the job is green the new release is live
+   on the [Releases page](https://github.com/abulka/bookmarks-super-manager/releases).
+   Release notes are generated automatically from the commits since the last
+   release tag.
+
+Notes:
+
+- The workflow only cares about `package.json`'s version, not the tag. If you
+  bump the version but forget `git push --tags`, the release still happens —
+  it's just built from `HEAD` on `main` and tagged with `vX.Y.Z` automatically.
+- If a release for the current version already exists, the job skips — bump the
+  version again for your next release.
+
 ## For developers
 
 Contributors building and testing from source — end users don't need this
