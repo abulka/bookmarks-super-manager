@@ -9,6 +9,7 @@ import { findNode, namePath, toolbarFolder } from '../../lib/tree'
 import { formatDate } from '../../lib/date'
 import { hostOf } from '../../lib/url'
 import { prepareDrag } from '../../lib/drag'
+import { confirmDelete } from '../../lib/confirmDelete'
 import type { BmNode } from '../../types'
 import Favicon from '../shared/Favicon.vue'
 import ContextMenu from '../shared/ContextMenu.vue'
@@ -309,8 +310,7 @@ function selectAllDead(): void {
 function deleteSelected(): void {
   const d = doc.value
   if (!d || !d.selected.length) return
-  docs.mutDelete(d.id, d.selected)
-  ui.notify('info', `Deleted ${d.selected.length} item${d.selected.length === 1 ? '' : 's'}`)
+  confirmDelete(d.id, d.selected, { kind: 'info', text: `Deleted ${d.selected.length} item${d.selected.length === 1 ? '' : 's'}` })
 }
 /** selected links that currently carry the ❌ dead marker */
 const selectedDeadIds = computed(() => {
@@ -422,8 +422,7 @@ function openMenu(e: MouseEvent, n: BmNode): void {
     items.push({ label: 'Check link', icon: 'Network', action: () => checkLink(n) })
   }
   items.push({ label: 'Delete', icon: 'Trash2', danger: true, shortcut: 'Del', action: () => {
-    docs.mutDelete(props.docId, isSelected(n.id) ? [...new Set([...d!.selected, n.id])] : [n.id])
-    ui.notify('info', 'Deleted')
+    confirmDelete(props.docId, isSelected(n.id) ? [...new Set([...d!.selected, n.id])] : [n.id], { kind: 'info', text: 'Deleted' })
   } })
   contextRef.value?.show({ x: e.clientX, y: e.clientY, items, title: n.name })
 }
@@ -649,7 +648,7 @@ onBeforeUnmount(() => {
             <button class="icon-btn" title="Edit" @click.stop="startEdit(n, 'name')">
               <component :is="icon('Pencil')" :size="13" />
             </button>
-            <button class="icon-btn danger" title="Delete" @click.stop="docs.mutDelete(doc.id, [n.id])">
+            <button class="icon-btn danger" title="Delete" @click.stop="confirmDelete(doc.id, [n.id])">
               <component :is="icon('Trash2')" :size="13" />
             </button>
           </span>
@@ -776,11 +775,22 @@ onBeforeUnmount(() => {
   background: var(--accent-softer);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
-.bm-row.drophover[data-drophover='before'] {
-  box-shadow: inset 0 2px 0 var(--accent);
+/* straight insertion line across the row edge — box-shadow would follow the
+   row's rounded corners and curve at the ends */
+.bm-row.drophover[data-drophover='before']::after,
+.bm-row.drophover[data-drophover='after']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
 }
-.bm-row.drophover[data-drophover='after'] {
-  box-shadow: inset 0 -2px 0 var(--accent);
+.bm-row.drophover[data-drophover='before']::after {
+  top: 0;
+}
+.bm-row.drophover[data-drophover='after']::after {
+  bottom: 0;
 }
 .bm-name {
   flex: 1;

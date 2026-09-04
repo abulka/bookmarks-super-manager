@@ -32,6 +32,31 @@ const version = __APP_VERSION__
       </section>
 
       <section>
+        <h2><component :is="icon('Globe')" :size="14" /> Two ways to run it</h2>
+        <p>This app comes in two modes, and they handle your bookmarks very differently:</p>
+        <ul>
+          <li>
+            <b>Standalone web app</b> (this window, when you open the hosted site or <code>npm run dev</code>). You
+            <b>import</b> a bookmarks export (<code>.html</code> / <code>.json</code>), organise, and <b>export</b> a
+            fresh copy. Your bookmarks live in <i>files</i> you control — the app never touches Chrome's live bookmarks.
+            Everything stays in this browser; nothing is uploaded.
+          </li>
+          <li>
+            <b>Chrome extension</b> (MV3). Installed from <code>dist-extension/</code>, the app opens your <b>real,
+            live</b> <code>chrome.bookmarks</code> in a manager tab. Edit it with everything the web app does, then push
+            the changes back into Chrome with one <b>Apply to Chrome</b> button. The live tab is never persisted — it is
+            re-read fresh from Chrome each time, and Apply refuses to run if Chrome changed elsewhere since the tab was
+            loaded.
+          </li>
+        </ul>
+        <p>
+          So: use the <b>extension</b> to reorganise the bookmarks you actually use; use the <b>standalone app</b> to
+          work on an exported <i>file</i> (a backup, a separate library, or a cleanup you want to keep as a file rather
+          than push straight into Chrome).
+        </p>
+      </section>
+
+      <section>
         <h2><component :is="icon('Layers')" :size="14" /> What this adds beyond Chrome's bookmark manager</h2>
         <p>
           To be fair, <b>Chrome's built-in bookmark manager is a decent treeview</b> and supports drag &amp; drop too —

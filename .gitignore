@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-extension
 *.local
 
 # the picker's demo set — a small public demo (no real bookmarks), committed.

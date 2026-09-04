@@ -34,7 +34,9 @@ function closeTab(docId: string): void {
   if (doc.dirty) {
     ui.openModal('confirm', {
       title: 'Close without exporting?',
-      message: `“${doc.fileName}” has changes that haven't been exported. Closing the tab discards them — the file on disk is not updated.`,
+      message: doc.ephemeral
+        ? `“${doc.fileName}” has changes that haven't been applied to Chrome. Closing the tab discards them — your Chrome bookmarks are not changed.`
+        : `“${doc.fileName}” has changes that haven't been exported. Closing the tab discards them — the file on disk is not updated.`,
       confirmLabel: 'Close and discard',
       danger: true,
       onConfirm: () => {

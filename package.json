@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "build:extension": "vue-tsc -b && vite build --config vite.extension.config.ts",
+    "run:extension": "\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --user-data-dir=/tmp/bm-test --no-first-run --no-default-browser-check",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,6 +19,7 @@
     "vue": "^3.5.42"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.8",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.5.0",

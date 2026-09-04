@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Super Manager",
+  "version": "0.1.0",
+  "description": "Edit your Chrome bookmarks with drag & drop, undo, dupes, search and dead-link checking, then apply changes back to Chrome.",
+  "permissions": ["bookmarks"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {},
+  "background": { "service_worker": "background.js", "type": "module" }
+}

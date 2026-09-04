@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useIcon } from '../../../lib/icons'
 
 interface Payload {
@@ -6,14 +7,18 @@ interface Payload {
   message?: string
   confirmLabel?: string
   danger?: boolean
-  onConfirm?: () => void
+  /** optional "don't ask again"-style checkbox shown above the actions */
+  checkbox?: { label: string }
+  /** receives the checkbox state (true = checked) when the confirm button is pressed */
+  onConfirm?: (checked?: boolean) => void
 }
 const props = defineProps<{ payload: Payload }>()
 const emit = defineEmits<{ close: [] }>()
 const icon = (name: string) => useIcon(name)
+const checked = ref(false)
 
 function confirm(): void {
-  props.payload.onConfirm?.()
+  props.payload.onConfirm?.(checked.value)
   emit('close')
 }
 </script>
@@ -25,6 +30,10 @@ function confirm(): void {
       <span>{{ payload.title }}</span>
     </div>
     <p v-if="payload.message" class="msg">{{ payload.message }}</p>
+    <label v-if="payload.checkbox" class="chk">
+      <input v-model="checked" type="checkbox" />
+      <span>{{ payload.checkbox.label }}</span>
+    </label>
     <div class="foot">
       <button class="btn" @click="emit('close')">Cancel</button>
       <button class="btn" :class="{ danger: payload.danger, primary: !payload.danger }" @click="confirm">
@@ -53,6 +62,19 @@ function confirm(): void {
   line-height: 1.6;
   margin: 10px 2px 18px;
   font-size: 13px;
+}
+.chk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -8px 2px 16px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+.chk input {
+  accent-color: var(--accent);
 }
 .foot {
   display: flex;

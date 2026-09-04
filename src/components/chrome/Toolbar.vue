@@ -6,6 +6,9 @@ import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
 import { loadSampleNames, fetchSampleText } from '../../lib/samples'
 import { crumbPath, indexTree, namePath } from '../../lib/tree'
+import { isChromeExt, chromeBackend, getBaseline, setBaseline, plainEquals, chromeRootToNode } from '../../lib/backend/chrome'
+import { planApply, applyToChrome } from '../../lib/backend/chromeSync'
+import type { BookmarkDoc } from '../../types'
 
 const docs = useDocs()
 const prefs = usePrefs()
@@ -157,9 +160,15 @@ function applyKey(key: string): void {
   else if (key.startsWith('folder/')) docs.setCurrentFolder(d.id, key.slice(7))
 }
 
-function refresh(): void {
+async function refresh(): Promise<void> {
   const d = active.value
   if (!d) return
+  // on the live Chrome tab, Reload really reloads: re-read chrome.bookmarks
+  // (confirm first when unapplied edits would be discarded)
+  if (d.ephemeral && isChromeExt()) {
+    await reloadFromChrome(d, !!d.dirty)
+    return
+  }
   ui.notify('info', 'Rewriting tree…')
   d.collapsed = { ...d.collapsed }
 }
@@ -182,6 +191,124 @@ function exportCurrent(): void {
   const d = active.value
   if (!d) return
   ui.openModal('export', { docId: d.id })
+}
+
+// ---- Apply to Chrome (live doc, extension only) ---------------------------
+const isChromeDoc = computed(() => !!active.value?.ephemeral && isChromeExt())
+const applyingNow = ref(false)
+
+/**
+ * Real reload for the live Chrome tab: re-reads chrome.bookmarks and replaces
+ * the tab's tree. Unapplied edits are discarded, so a dirty doc confirms
+ * first. This is the recovery path when Apply is blocked by outside changes.
+ */
+async function reloadFromChrome(d: BookmarkDoc, confirmFirst: boolean): Promise<void> {
+  const run = async (): Promise<void> => {
+    try {
+      const backend = chromeBackend()
+      const fresh = await backend.getTree()
+      const baseline = getBaseline(d.id)
+      if (baseline && plainEquals(baseline, fresh)) {
+        ui.notify('info', 'Already up to date with Chrome — nothing to reload.')
+        return
+      }
+      docs.replaceChromeRoot(d.id, chromeRootToNode(fresh))
+      setBaseline(d.id, fresh)
+      ui.notify('success', 'Reloaded — this tab now shows the current Chrome bookmarks.')
+    } catch {
+      ui.notify('error', 'Could not read the Chrome bookmarks — try again in a moment.', undefined, 6000)
+    }
+  }
+  if (!confirmFirst) {
+    await run()
+    return
+  }
+  ui.openModal('confirm', {
+    title: 'Reload from Chrome?',
+    message:
+      "Chrome's bookmarks always take priority over this tab. Reloading replaces the tab with the current Chrome bookmarks and discards the unapplied edits in this tab — they cannot be recovered. To keep a copy of your edits, export the tab first. Cancel leaves the tab unchanged, but its edits still cannot be applied.",
+    confirmLabel: 'Discard edits and reload',
+    danger: true,
+    onConfirm: run,
+  })
+}
+
+async function apply(d: BookmarkDoc, backend: ReturnType<typeof chromeBackend>, summary: string): Promise<void> {
+  const r = await applyToChrome(d, backend)
+  if (r.ok) {
+    setBaseline(d.id, r.tree)
+    docs.markExported(d.id)
+    docs.bump()
+    ui.notify('success', `Applied to Chrome: ${summary}`)
+  } else {
+    const n = r.failures.length
+    ui.notify(
+      'error',
+      `Applied with ${n} failure${n === 1 ? '' : 's'}. Chrome and this tab still differ — nothing was lost: the tab stays dirty, and pressing Apply to Chrome again re-diffs and retries only what is missing.`,
+      undefined,
+      0,
+    )
+  }
+}
+
+async function onApplyToChrome(): Promise<void> {
+  const d = active.value
+  if (!d || !isChromeDoc.value || applyingNow.value) return
+  applyingNow.value = true
+  try {
+    let backend: ReturnType<typeof chromeBackend>
+    try {
+      backend = chromeBackend()
+    } catch {
+      ui.notify('error', 'chrome.bookmarks is not available in this context')
+      return
+    }
+    let plan
+    try {
+      plan = await planApply(d.root, getBaseline(d.id), backend)
+    } catch {
+      ui.notify('error', 'Could not read the current Chrome bookmarks')
+      return
+    }
+    if (plan.blocked) {
+      ui.notify(
+        "error",
+        "The Chrome bookmarks changed since this tab was loaded, and Chrome always takes priority — the edits in this tab can no longer be applied. Click the ↻ Reload button to start from the current bookmarks (your edits here are discarded), then redo your changes.",
+        undefined,
+        0,
+      )
+      return
+    }
+    if (!plan.ops.length) {
+      docs.markExported(d.id)
+      ui.notify('success', 'Chrome bookmarks are already in sync')
+      return
+    }
+    const c = plan.counts
+    const parts: string[] = []
+    if (c.created) parts.push(`create ${c.created}`)
+    if (c.updated) parts.push(`rename/edit ${c.updated}`)
+    if (c.moved) parts.push(`move ${c.moved}`)
+    if (c.deleted) parts.push(`DELETE ${c.deleted}`)
+    const summary = parts.join(', ')
+    if (prefs.skipApplyConfirm) {
+      await apply(d, backend, summary)
+      return
+    }
+    ui.openModal('confirm', {
+      title: 'Apply to Chrome?',
+      message: `This writes to your real Chrome bookmarks: ${summary}.`,
+      confirmLabel: 'Apply to Chrome',
+      danger: c.deleted > 0,
+      checkbox: { label: `Don't ask again` },
+      onConfirm: async (checked?: boolean) => {
+        if (checked) prefs.skipApplyConfirm = true
+        await apply(d, backend, summary)
+      },
+    })
+  } finally {
+    applyingNow.value = false
+  }
 }
 
 // spotlight: press cmd/ctrl+L or cmd/ctrl+F to focus omnibox
@@ -253,7 +380,11 @@ onBeforeUnmount(() => {
       <button class="icon-btn" title="Forward" :disabled="!canForward" @click="forward">
         <component :is="icon('ArrowRight')" :size="17" />
       </button>
-      <button class="icon-btn" title="Reload" @click="refresh">
+      <button
+        class="icon-btn"
+        :title="isChromeDoc ? (active?.dirty ? 'Reload from Chrome — discards unapplied edits' : 'Reload from Chrome') : 'Reload'"
+        @click="refresh"
+      >
         <component :is="icon('RefreshCw')" :size="16" />
       </button>
     </div>
@@ -322,6 +453,20 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="toolbar-group">
+      <button
+        v-if="isChromeDoc"
+        class="toolbar-btn apply-btn"
+        :class="{ active: active?.dirty }"
+        :title="active?.dirty ? 'Write your changes back to Chrome' : 'No changes to apply'"
+        :disabled="!active?.dirty || applyingNow"
+        @click="onApplyToChrome"
+      >
+        <component :is="icon('CloudUpload')" :size="15" />
+        Apply to Chrome
+      </button>
+      <button class="icon-btn" title="Settings" @click="ui.openModal('settings')">
+        <component :is="icon('Settings2')" :size="16" />
+      </button>
       <button class="icon-btn" title="About & help" @click="ui.openModal('about')">
         <component :is="icon('CircleHelp')" :size="16" />
       </button>
@@ -353,6 +498,48 @@ onBeforeUnmount(() => {
   border-right: none;
   margin-right: 0;
   padding-right: 0;
+}
+.apply-btn {
+  position: relative;
+  color: var(--text-2);
+}
+.apply-btn:disabled {
+  opacity: 0.4;
+}
+.apply-btn:not(:disabled) {
+  background: var(--ok);
+  color: var(--ok-ink);
+  font-weight: 600;
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+.apply-btn:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+/* gentle attention pulse while the button is actionable */
+.apply-btn:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ok-soft);
+  z-index: -1;
+  animation: apply-pulse 2.6s var(--ease) infinite;
+}
+@keyframes apply-pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .apply-btn:not(:disabled)::after {
+    animation: none;
+  }
 }
 
 .omnibox {

@@ -1,13 +1,41 @@
 # Bookmark Super Manager
 
-A fast, local-first browser bookmark viewer and manager. Import your Chrome /
-Safari / Edge / Firefox (or any Netscape-format) bookmark export, then organise:
-sidebar tree, search, folders, drag & drop, duplicate detection, a link checker,
-and multiple bookmark files open as tabs. Export back to Chrome-compatible HTML.
+A fast, local-first browser bookmark viewer and manager. Sidebar tree, search,
+folders, drag & drop, duplicate detection, a link checker, and multiple bookmark
+files open as tabs.
+
+It runs in **two modes** — pick whichever suits the job:
+
+- **Standalone web app** — import a bookmark export (`.html` / `.json`), organise
+  it as a file, and export a fresh copy. Your bookmarks live in *files* you
+  control; the app never touches your live browser bookmarks.
+- **Chrome extension (MV3)** — open your **real, live** Chrome bookmarks in a
+  manager tab, edit them with everything the web app does, and push the changes
+  back into Chrome with one **Apply to Chrome** button.
 
 **Nothing is uploaded.** Everything runs locally in your browser — bookmarks are
 stored in your browser's own IndexedDB and never leave your machine. It can be
 hosted as a plain static site (e.g. Netlify).
+
+## Two ways to run it
+
+| | Standalone web app | Chrome extension |
+| --- | --- | --- |
+| Where bookmarks live | In exported **files** you import/export | In Chrome's **live** `chrome.bookmarks` |
+| Organising | Import → reorganise → export a fresh copy | Edit live, then **Apply to Chrome** |
+| Touches your real Chrome bookmarks? | **No** — never | **Yes** — that's the point |
+| Best for | Backups, separate libraries, working on a file | Reorganising the bookmarks you actually use |
+
+Run it standalone at the hosted site or with `npm run dev`. Install the
+extension from `dist-extension/` as described below.
+
+### What these two modes share
+
+Both render the same manager — sidebar tree, drag & drop, cut / copy / paste,
+multi-select, search, duplicates and dead-link checking, undo — and both keep
+everything in this browser, uploading nothing. The only difference is where the
+bookmarks come from (a file vs. Chrome itself) and how changes leave the app
+(export vs. Apply to Chrome).
 
 ## Features
 
@@ -65,10 +93,87 @@ set from the sample picker (synthetic — no personal data).
 
 - `npm run dev` — dev server (port 5199)
 - `npm run build` — type-check + production build into `dist/`
+- `npm run build:extension` — type-check + build the Chrome extension into `dist-extension/`
 - `npm run preview` — serve the production build locally
 - `npm test` — unit tests
 - `make samples` — (in the parent container) copy a campaign's real exports as
   samples for development (stays local; never committed)
+
+## Chrome extension (live bookmarks)
+
+This is the second of the two modes (see the comparison above). Instead of the
+export → import → reorganise → export → re-import roundtrip, the app runs as a
+Chrome extension (MV3) that opens your *real* Chrome bookmarks in a manager tab.
+Edit with everything the web app does, then push the changes back with one
+**Apply to Chrome** button. The hosted standalone version is unaffected.
+
+> **The live tab hides Chrome's top-level "Mobile bookmarks" folder.** It is
+> sync bookkeeping that only clutters the tree; it stays untouched in Chrome,
+> and Apply never deletes Chrome's permanent top-level folders.
+
+Safety model: the live tab is never persisted (always re-read fresh from
+`chrome.bookmarks`), Apply shows a reviewable diff summary and confirms
+deletes, refuses to run if Chrome changed elsewhere since the tab was loaded,
+and permanently verifies the result by re-diffing after the write. Chrome's
+permanent top-level folders (Bookmarks bar / Other bookmarks) are never
+deleted.
+
+### Build & try it (throwaway profile first!)
+
+```bash
+npm run build:extension
+# launch a Chrome instance with its own private profile
+npm run run:extension
+```
+
+In that window:
+
+1. Go to `chrome://extensions`
+2. Toggle **Developer mode** (top right)
+3. Click **Load unpacked** → choose `…/bookmarks-super-manager/dist-extension`
+4. Click the extension's toolbar icon → the manager opens with the live
+   `chrome bookmarks` tab
+
+The `--user-data-dir` profile is a scratch instance — its bookmarks, storage
+and the extension itself are fully isolated from your daily Chrome. Don't sign
+in or enable sync on it. Never omit the flag when testing; omitting it loads
+the extension into your real profile (which is exactly how you use it for real
+once you trust it — same steps, your normal window).
+
+Note: `--load-extension` on the command line is dead in branded Chrome (≥ M137
+silently ignores it — verified during the spike), but the **Load unpacked** UI
+works fine.
+
+### Updating the extension during development
+
+"Load unpacked" does not copy anything into the profile — Chrome **references
+the `dist-extension/` folder on disk** and reads its current contents whenever
+it starts or reloads the extension. So:
+
+1. Rebuild: `npm run build:extension` (or keep `npx vite build --config vite.extension.config.ts --watch`
+   running to rebuild on every save)
+2. In `chrome://extensions`, click the **↻ reload icon** on the extension's
+   card — this re-reads the folder, manifest and service worker included.
+3. Reloading closes the extension's open pages, so click the toolbar icon
+   again to reopen the manager.
+
+You only need **Remove + Load unpacked again** when:
+
+- the manifest is broken after an edit (Chrome shows the error on the card), or
+- the `dist-extension/` folder **moved** — the extension id is derived from
+  the folder's absolute path, so a moved folder is a different extension as
+  far as Chrome is concerned. The live `chrome bookmarks` tab is unaffected by
+  such an id change (it is always re-read from Chrome), and any open file tabs
+  are re-importable from their source files.
+
+The card also shows console errors from the extension's service worker after
+a reload — useful when something breaks.
+
+### How it works (technical)
+
+See [PLAN-ADD-EXTENSION-SUPPORT.md](PLAN-ADD-EXTENSION-SUPPORT.md) for the
+architecture, the pinned `chrome.bookmarks` semantics, the spike results and
+the distribution plan.
 
 ## Link-checking note
 

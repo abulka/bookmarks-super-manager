@@ -20,8 +20,37 @@ const GET_TIMEOUT_MS = 2500
 // network-level client check below.
 const PROXIES = ['/__linkcheck', '/.netlify/functions/linkcheck']
 
+/** set from the 'run' message: running inside the Chrome extension */
+let extMode = false
+
 let cancelled = false
 let current: { urls: string[]; next: number } | null = null
+
+/**
+ * Extension mode: host_permissions let a plain CORS-mode fetch read the real
+ * HTTP status from any site — no proxy needed. Same verdict rules as the
+ * server: only 404/410 (or a hard network failure) means dead; our own
+ * timeouts and bot-protection statuses mean "reachable".
+ */
+async function extCheck(url: string): Promise<ProbeStatus> {
+  for (const method of ['HEAD', 'GET'] as const) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), method === 'HEAD' ? HEAD_TIMEOUT_MS : 5000)
+    try {
+      const r = await fetch(url, { method, redirect: 'follow', cache: 'no-store', signal: controller.signal })
+      await r.body?.cancel().catch(() => {})
+      if (r.status === 404 || r.status === 410) return 'dead'
+      return 'alive'
+    } catch (e) {
+      // our own timeout is not evidence the site is gone
+      if (e instanceof DOMException && e.name === 'AbortError') return 'alive'
+      // network-level failure on HEAD → retry with GET before deciding
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  return 'dead'
+}
 
 /** Ask a same-origin server endpoint for the real HTTP status. Returns null when unavailable. */
 async function proxyCheck(url: string): Promise<ProbeStatus | null> {
@@ -80,6 +109,8 @@ async function probe(url: string): Promise<ProbeStatus> {
   // can't be verified — the dev server may simply not be running — so never
   // mark them dead; the apply step revives any stale ❌ on them.
   if (isPrivateHost(hostOf(url))) return 'skipped'
+  // Extension: host permissions make the real status directly readable.
+  if (extMode) return extCheck(url)
   // Prefer the accurate server-side status when the local proxy is available.
   const viaProxy = await proxyCheck(url)
   if (viaProxy) return viaProxy
@@ -87,12 +118,13 @@ async function probe(url: string): Promise<ProbeStatus> {
   return clientCheck(url)
 }
 
-self.onmessage = async (e: MessageEvent<{ type: 'run' | 'cancel'; urls?: string[]; runId?: string }>) => {
+self.onmessage = async (e: MessageEvent<{ type: 'run' | 'cancel'; urls?: string[]; runId?: string; ext?: boolean }>) => {
   if (e.data.type === 'cancel') {
     cancelled = true
     return
   }
   const { urls = [], runId = '' } = e.data
+  extMode = e.data.ext === true
   cancelled = false
   current = { urls, next: 0 }
   let done = 0

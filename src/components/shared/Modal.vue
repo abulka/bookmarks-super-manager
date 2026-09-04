@@ -10,6 +10,7 @@ import ImportTarget from './dialogs/ImportTarget.vue'
 import ExportDialog from './dialogs/ExportDialog.vue'
 import StatsSheet from './dialogs/StatsSheet.vue'
 import AboutDialog from './dialogs/AboutDialog.vue'
+import SettingsDialog from './dialogs/SettingsDialog.vue'
 
 const ui = useUi()
 const empty = {} as never
@@ -54,6 +55,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <template v-else-if="ui.modal.kind === 'about'">
           <AboutDialog @close="close" />
         </template>
+        <template v-else-if="ui.modal.kind === 'settings'">
+          <SettingsDialog @close="close" />
+        </template>
       </div>
     </div>
   </Teleport>
@@ -88,5 +92,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .modal.about {
   width: min(720px, calc(100vw - 40px));
   max-height: min(80vh, 720px);
+}
+/* the settings sheet needs a touch more room than the default */
+.modal.settings {
+  width: min(480px, calc(100vw - 40px));
 }
 </style>

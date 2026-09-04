@@ -41,6 +41,8 @@ export interface BookmarkDoc {
   deadFolderCreated?: boolean
   /** content changed since the last export (or import); closing such a tab warns */
   dirty?: boolean
+  /** never persisted to IndexedDB (the live Chrome doc) — always re-read from the source */
+  ephemeral?: boolean
 }
 
 export interface WorkspaceMeta {

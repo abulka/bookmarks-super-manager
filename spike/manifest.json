@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "BSM Bookmarks Spike",
+  "version": "1.0.0",
+  "description": "Throwaway probe for chrome.bookmarks semantics. Throwaway profiles only.",
+  "permissions": ["bookmarks"],
+  "background": { "service_worker": "spike-sw.js" }
+}

@@ -1,0 +1,581 @@
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+  "chromeVersion": "151.0.0.0",
+  "root": {
+    "id": "0",
+    "title": "",
+    "dateAdded": 1788436012264,
+    "children": [
+      {
+        "id": "1",
+        "title": "Bookmarks bar",
+        "index": 0,
+        "dateAdded": 1788436012264,
+        "children": []
+      },
+      {
+        "id": "2",
+        "title": "Other bookmarks",
+        "index": 1,
+        "dateAdded": 1788436012264,
+        "children": []
+      }
+    ]
+  },
+  "steps": [
+    {
+      "name": "root-children",
+      "ok": true,
+      "rootChildren": [
+        {
+          "id": "1",
+          "title": "Bookmarks bar"
+        },
+        {
+          "id": "2",
+          "title": "Other bookmarks"
+        }
+      ]
+    },
+    {
+      "name": "create-folder-append",
+      "ok": true,
+      "createdId": "5",
+      "index": 0,
+      "dateAdded": 1788436013072,
+      "dateNow": 1788436013072,
+      "after": [
+        "5*:F1"
+      ]
+    },
+    {
+      "name": "create-link-index0",
+      "ok": true,
+      "createdId": "6",
+      "index": 0,
+      "after": [
+        "6:L1",
+        "5*:F1"
+      ]
+    },
+    {
+      "name": "create-link-append",
+      "ok": true,
+      "createdId": "7",
+      "index": 2,
+      "after": [
+        "6:L1",
+        "5*:F1",
+        "7:L2"
+      ]
+    },
+    {
+      "name": "create-link-append2",
+      "ok": true,
+      "createdId": "8",
+      "index": 3,
+      "after": [
+        "6:L1",
+        "5*:F1",
+        "7:L2",
+        "8:L3"
+      ]
+    },
+    {
+      "name": "create-index-beyond-end",
+      "ok": false,
+      "error": "Index out of bounds."
+    },
+    {
+      "name": "bounds-setup",
+      "ok": true,
+      "g": "9",
+      "h": "10",
+      "b1": "11",
+      "b2": "12",
+      "b3": "13"
+    },
+    {
+      "name": "move-same-parent-index-eq-count",
+      "ok": true,
+      "unexpected": "index == count accepted",
+      "after": [
+        "12:b2",
+        "13:b3",
+        "11:b1"
+      ]
+    },
+    {
+      "name": "move-same-parent-down-request-count-1",
+      "ok": true,
+      "after": [
+        "12:b2",
+        "13:b3",
+        "11:b1"
+      ]
+    },
+    {
+      "name": "move-same-parent-omit-index-appends",
+      "ok": true,
+      "after": [
+        "12:b2",
+        "13:b3",
+        "11:b1"
+      ]
+    },
+    {
+      "name": "move-cross-parent-index0",
+      "ok": true,
+      "gAfter": [
+        "13:b3",
+        "11:b1"
+      ],
+      "hAfter": [
+        "12:b2"
+      ]
+    },
+    {
+      "name": "move-cross-parent-index-eq-dest-count",
+      "ok": true,
+      "hAfter": [
+        "12:b2",
+        "13:b3"
+      ]
+    },
+    {
+      "name": "move-cross-parent-index-beyond",
+      "ok": false,
+      "error": "Index out of bounds."
+    },
+    {
+      "name": "create-index-eq-count-appends",
+      "ok": true,
+      "index": 2,
+      "hAfter": [
+        "12:b2",
+        "13:b3",
+        "14:b4"
+      ]
+    },
+    {
+      "name": "move-end-to-0",
+      "ok": true,
+      "moved": "8",
+      "requestedIndex": 0,
+      "after": [
+        "8:L3",
+        "6:L1",
+        "5*:F1",
+        "7:L2"
+      ]
+    },
+    {
+      "name": "move-pos1-to-end",
+      "ok": false,
+      "error": "Index out of bounds."
+    },
+    {
+      "name": "move-pos0-to-2",
+      "ok": true,
+      "moved": "8",
+      "requestedIndex": 2,
+      "after": [
+        "6:L1",
+        "8:L3",
+        "5*:F1",
+        "7:L2"
+      ]
+    },
+    {
+      "name": "move-noop",
+      "ok": true,
+      "moved": "6",
+      "requestedIndex": 0,
+      "after": [
+        "6:L1",
+        "8:L3",
+        "5*:F1",
+        "7:L2"
+      ]
+    },
+    {
+      "name": "create-f2-with-children",
+      "ok": true,
+      "f2": "15",
+      "c1": "16",
+      "c2": "17",
+      "after": [
+        "6:L1",
+        "8:L3",
+        "5*:F1",
+        "7:L2",
+        "15*:F2"
+      ]
+    },
+    {
+      "name": "move-cross-parent-into-bar-1",
+      "ok": true,
+      "moved": "17",
+      "requestedIndex": 1,
+      "barAfter": [
+        "6:L1",
+        "17:c2",
+        "8:L3",
+        "5*:F1",
+        "7:L2",
+        "15*:F2"
+      ],
+      "f2After": [
+        "16:c1"
+      ]
+    },
+    {
+      "name": "move-cross-parent-into-f2-0",
+      "ok": true,
+      "moved": "6",
+      "requestedIndex": 0,
+      "barAfter": [
+        "17:c2",
+        "8:L3",
+        "5*:F1",
+        "7:L2",
+        "15*:F2"
+      ],
+      "f2After": [
+        "6:L1",
+        "16:c1"
+      ]
+    },
+    {
+      "name": "reorder-convergence-reverse",
+      "ok": true,
+      "desired": "15,7,5,8,17",
+      "after": "15,7,5,8,17",
+      "converged": true
+    },
+    {
+      "name": "reorder-convergence-rotate",
+      "ok": true,
+      "desired": "7,5,8,17,15",
+      "after": "7,5,8,17,15",
+      "converged": true
+    },
+    {
+      "name": "update-rename",
+      "ok": true,
+      "id": "5",
+      "after": [
+        "7:L2",
+        "5*:F1-renamed",
+        "8:L3",
+        "17:c2",
+        "15*:F2"
+      ]
+    },
+    {
+      "name": "update-url",
+      "ok": true,
+      "id": "7",
+      "urlAfter": "https://example.com/updated",
+      "titleAfter": "L2"
+    },
+    {
+      "name": "remove-nonempty-folder-fails",
+      "ok": false,
+      "error": "Can't remove non-empty folder (use recursive to force)."
+    },
+    {
+      "name": "removeTree-nonempty-folder",
+      "ok": true,
+      "after": [
+        "7:L2",
+        "5*:F1-renamed",
+        "8:L3",
+        "17:c2"
+      ]
+    },
+    {
+      "name": "remove-leaf",
+      "ok": true,
+      "removed": "7",
+      "after": [
+        "5*:F1-renamed",
+        "8:L3",
+        "17:c2"
+      ]
+    },
+    {
+      "name": "move-into-own-descendant",
+      "ok": false,
+      "error": "Can't move a folder to itself or its descendant."
+    },
+    {
+      "name": "duplicate-url-create",
+      "ok": true,
+      "a": "20",
+      "b": "21",
+      "bothAllowed": true
+    },
+    {
+      "name": "final-bar",
+      "ok": true,
+      "after": [
+        "5*:F1-renamed",
+        "8:L3",
+        "17:c2",
+        "18*:F3",
+        "20:dupA",
+        "21:dupB"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "ev": "onCreated",
+      "id": "5",
+      "title": "F1",
+      "index": 0
+    },
+    {
+      "ev": "onCreated",
+      "id": "6",
+      "title": "L1",
+      "index": 0
+    },
+    {
+      "ev": "onCreated",
+      "id": "7",
+      "title": "L2",
+      "index": 2
+    },
+    {
+      "ev": "onCreated",
+      "id": "8",
+      "title": "L3",
+      "index": 3
+    },
+    {
+      "ev": "onCreated",
+      "id": "9",
+      "title": "G",
+      "index": 0
+    },
+    {
+      "ev": "onCreated",
+      "id": "10",
+      "title": "H",
+      "index": 1
+    },
+    {
+      "ev": "onCreated",
+      "id": "11",
+      "title": "b1",
+      "index": 0
+    },
+    {
+      "ev": "onCreated",
+      "id": "12",
+      "title": "b2",
+      "index": 1
+    },
+    {
+      "ev": "onCreated",
+      "id": "13",
+      "title": "b3",
+      "index": 2
+    },
+    {
+      "ev": "onMoved",
+      "id": "11",
+      "index": 2,
+      "oldIndex": 0,
+      "oldParentId": "9",
+      "parentId": "9"
+    },
+    {
+      "ev": "onMoved",
+      "id": "12",
+      "index": 0,
+      "oldIndex": 0,
+      "oldParentId": "9",
+      "parentId": "10"
+    },
+    {
+      "ev": "onMoved",
+      "id": "13",
+      "index": 1,
+      "oldIndex": 0,
+      "oldParentId": "9",
+      "parentId": "10"
+    },
+    {
+      "ev": "onCreated",
+      "id": "14",
+      "title": "b4",
+      "index": 2
+    },
+    {
+      "ev": "onMoved",
+      "id": "8",
+      "index": 0,
+      "oldIndex": 3,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "8",
+      "index": 1,
+      "oldIndex": 0,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onCreated",
+      "id": "15",
+      "title": "F2",
+      "index": 4
+    },
+    {
+      "ev": "onCreated",
+      "id": "16",
+      "title": "c1",
+      "index": 0
+    },
+    {
+      "ev": "onCreated",
+      "id": "17",
+      "title": "c2",
+      "index": 1
+    },
+    {
+      "ev": "onMoved",
+      "id": "17",
+      "index": 1,
+      "oldIndex": 1,
+      "oldParentId": "15",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "6",
+      "index": 0,
+      "oldIndex": 0,
+      "oldParentId": "1",
+      "parentId": "15"
+    },
+    {
+      "ev": "onMoved",
+      "id": "15",
+      "index": 0,
+      "oldIndex": 4,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "7",
+      "index": 1,
+      "oldIndex": 4,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "5",
+      "index": 2,
+      "oldIndex": 4,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "8",
+      "index": 3,
+      "oldIndex": 4,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "7",
+      "index": 0,
+      "oldIndex": 1,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "5",
+      "index": 1,
+      "oldIndex": 2,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "8",
+      "index": 2,
+      "oldIndex": 3,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onMoved",
+      "id": "17",
+      "index": 3,
+      "oldIndex": 4,
+      "oldParentId": "1",
+      "parentId": "1"
+    },
+    {
+      "ev": "onChanged",
+      "id": "5",
+      "title": "F1-renamed"
+    },
+    {
+      "ev": "onChanged",
+      "id": "7",
+      "title": "L2",
+      "url": "https://example.com/updated"
+    },
+    {
+      "ev": "onRemoved",
+      "id": "15",
+      "parentId": "1",
+      "index": 4,
+      "wholeTree": true
+    },
+    {
+      "ev": "onRemoved",
+      "id": "7",
+      "parentId": "1",
+      "index": 0,
+      "wholeTree": false
+    },
+    {
+      "ev": "onCreated",
+      "id": "18",
+      "title": "F3",
+      "index": 3
+    },
+    {
+      "ev": "onCreated",
+      "id": "19",
+      "title": "F4",
+      "index": 0
+    },
+    {
+      "ev": "onCreated",
+      "id": "20",
+      "title": "dupA",
+      "index": 4
+    },
+    {
+      "ev": "onCreated",
+      "id": "21",
+      "title": "dupB",
+      "index": 5
+    }
+  ]
+}

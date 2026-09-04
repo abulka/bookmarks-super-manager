@@ -8,6 +8,7 @@ import { useIcon } from '../../lib/icons'
 import { groupByParent, indexTree, folderCounts, namePath, toolbarFolder, topmostIds } from '../../lib/tree'
 import { matchQuery, tokenizeQuery } from '../../lib/search'
 import { prepareDrag } from '../../lib/drag'
+import { confirmDelete } from '../../lib/confirmDelete'
 import type { BmNode } from '../../types'
 import ContextMenu from '../shared/ContextMenu.vue'
 
@@ -344,8 +345,7 @@ function onContextMenu(e: MouseEvent, n: BmNode): void {
       navigator.clipboard?.writeText(path).then(() => ui.notify('info', 'Path copied'))
     } })
     items.push({ label: 'Delete', icon: 'Trash2', danger: true, shortcut: 'Del', action: () => {
-      docs.mutDelete(props.docId, [n.id])
-      ui.notify('info', 'Deleted')
+      confirmDelete(props.docId, [n.id], { kind: 'info', text: 'Deleted' })
     } })
   }
   contextRef.value?.show({ x: e.clientX, y: e.clientY, items, title: n.name })
@@ -659,11 +659,22 @@ function pasteTree(): void {
   background: var(--accent-softer);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
-.tree-row.drophover[data-drophover='before'] {
-  box-shadow: inset 0 2px 0 var(--accent);
+/* straight insertion line across the row edge — box-shadow would follow the
+   row's rounded corners and curve at the ends */
+.tree-row.drophover[data-drophover='before']::after,
+.tree-row.drophover[data-drophover='after']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
 }
-.tree-row.drophover[data-drophover='after'] {
-  box-shadow: inset 0 -2px 0 var(--accent);
+.tree-row.drophover[data-drophover='before']::after {
+  top: 0;
+}
+.tree-row.drophover[data-drophover='after']::after {
+  bottom: 0;
 }
 .tree-empty {
   padding: 30px;

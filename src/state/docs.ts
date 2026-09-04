@@ -8,6 +8,7 @@ import { findDuplicates, findNode, indexTree, isDescendant, sortFolder, walk } f
 import { applyMove, applyRemove, cloneNodes, indexOf, restoreRemove } from '../lib/mutations'
 import { rewriteUrl } from '../lib/urlrewrite'
 import { UndoStack } from './undo'
+import { isChromeExt, clearBaseline } from '../lib/backend/chrome'
 
 const WORKSPACES_KEY = 'bm.workspace.v1'
 const DOC_PREFIX = 'bm.doc.v1.'
@@ -62,10 +63,10 @@ export const useDocs = defineStore('docs', {
 
     touch(docId: string, dirty = true): void {
       this.treeVersion++
-      if (dirty) {
-        const doc = this.byId(docId)
-        if (doc) doc.dirty = true
-      }
+      const doc = this.byId(docId)
+      if (doc && dirty) doc.dirty = true
+      // the live Chrome doc is ephemeral — never schedule an IndexedDB save
+      if (!doc || doc.ephemeral) return
       const t = this._saveTimers[docId]
       if (t) clearTimeout(t)
       this._saveTimers[docId] = setTimeout(() => this.saveDoc(docId), 400)
@@ -122,6 +123,15 @@ export const useDocs = defineStore('docs', {
         /* corrupted storage: start fresh */
       }
       this.initialised = true
+      // in the extension, the live Chrome doc is always opened fresh from
+      // chrome.bookmarks — never from a stored snapshot
+      if (isChromeExt()) {
+        try {
+          await this.openChromeDoc(!this.docs.length)
+        } catch {
+          /* bookmarks API unavailable — plain extension session */
+        }
+      }
     },
 
     prepareDoc(doc: BookmarkDoc): void {
@@ -143,7 +153,7 @@ export const useDocs = defineStore('docs', {
 
     async saveDoc(docId: string): Promise<void> {
       const doc = this.byId(docId)
-      if (!doc) return
+      if (!doc || doc.ephemeral) return
       // strip reactivity + deep-copy from the RAW tree: JSON.stringify of a
       // reactive Pinia proxy walks getters for every node, which is ~10-50x
       // slower than the plain object on large libraries
@@ -151,7 +161,11 @@ export const useDocs = defineStore('docs', {
     },
 
     async persistWorkspace(): Promise<void> {
-      await idbSet(WORKSPACES_KEY, JSON.parse(JSON.stringify({ tabs: this.tabs, activeDocId: this.activeDocId })))
+      // ephemeral docs (the live Chrome tab) must never be part of the
+      // persisted workspace, so a stale snapshot can never be restored
+      const tabs = this.tabs.filter((id) => !this.byId(id)?.ephemeral)
+      const activeDocId = this.activeDocId && this.byId(this.activeDocId)?.ephemeral ? null : this.activeDocId
+      await idbSet(WORKSPACES_KEY, JSON.parse(JSON.stringify({ tabs, activeDocId })))
     },
 
     addDoc(doc: BookmarkDoc): string {
@@ -235,7 +249,65 @@ export const useDocs = defineStore('docs', {
       return this.addDoc(doc)
     },
 
+    async openChromeDoc(activate = true): Promise<string> {
+      const { fetchChromeTree, setBaseline, CHROME_DOC_ID, chromeRootToNode } = await import('../lib/backend/chrome')
+      if (this.byId(CHROME_DOC_ID)) {
+        if (activate) this.activeDocId = CHROME_DOC_ID
+        this.persistWorkspace()
+        return CHROME_DOC_ID
+      }
+      const tree = await fetchChromeTree()
+      const root = chromeRootToNode(tree)
+      const collapsed = this.collapseAllClosed(root)
+      if (root.children[0]) collapsed[root.children[0].id] = false
+      const doc: BookmarkDoc = {
+        id: CHROME_DOC_ID,
+        fileName: 'chrome bookmarks',
+        title: 'Chrome bookmarks',
+        importedAt: Date.now(),
+        root,
+        view: 'home',
+        currentFolderId: root.children[0]?.id ?? root.id,
+        collapsed,
+        selected: [],
+        treeSel: [],
+        searchQuery: '',
+        revealRev: 0,
+        lastRevealAt: 0,
+        ephemeral: true,
+        dirty: false,
+      }
+      this.prepareDoc(doc)
+      this.docs.push(doc)
+      this.tabs.push(doc.id)
+      if (activate) this.activeDocId = doc.id
+      setBaseline(doc.id, tree)
+      this.persistWorkspace()
+      return doc.id
+    },
+
+    /**
+     * Rebuild the live Chrome doc from a fresh chrome tree (external changes
+     * detected, or an explicit reload). Local edits are discarded: the undo
+     * stack is cleared and the dirty flag reset. UI state (collapsed folders)
+     * survives for ids that still exist.
+     */
+    replaceChromeRoot(docId: string, root: BmNode): void {
+      const doc = this.byId(docId)
+      if (!doc || !doc.ephemeral) return
+      doc.root = root
+      doc.collapsed = this.collapseAllClosed(root)
+      if (root.children[0]) doc.collapsed[root.children[0].id] = false
+      doc.selected = []
+      doc.treeSel = []
+      if (!findNode(root, doc.currentFolderId)) doc.currentFolderId = root.children[0]?.id ?? root.id
+      this.undoOf(docId).clear()
+      doc.dirty = false
+      this.bump()
+    },
+
     closeDoc(docId: string): void {
+      const doc = this.byId(docId)
       const i = this.tabs.indexOf(docId)
       this.docs = this.docs.filter((d) => d.id !== docId)
       this.tabs = this.tabs.filter((t) => t !== docId)
@@ -244,7 +316,9 @@ export const useDocs = defineStore('docs', {
         const next = this.tabs[Math.max(0, i - 1)] ?? this.tabs[0] ?? null
         this.activeDocId = next
       }
-      idbDel(DOC_PREFIX + docId).then(() => this.persistWorkspace())
+      if (doc && !doc.ephemeral) void idbDel(DOC_PREFIX + docId)
+      else clearBaseline(docId)
+      void this.persistWorkspace()
     },
 
     duplicateDoc(docId: string): string {
@@ -252,6 +326,7 @@ export const useDocs = defineStore('docs', {
       if (!doc) return ''
       const copy: BookmarkDoc = JSON.parse(JSON.stringify(doc))
       copy.id = uid()
+      copy.ephemeral = false // a duplicate is a standalone snapshot, persisted like any file doc
       copy.fileName = doc.fileName.replace(/\.html$/, '') + '-copy.html'
       copy.collapsed = {}
       copy.selected = []
@@ -821,3 +896,5 @@ export const useDocs = defineStore('docs', {
     },
   },
 })
+
+export type DocsStore = ReturnType<typeof useDocs>

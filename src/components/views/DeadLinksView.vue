@@ -5,6 +5,7 @@ import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
 import { hostOf } from '../../lib/url'
 import { namePath } from '../../lib/tree'
+import { confirmDelete } from '../../lib/confirmDelete'
 import type { BmNode } from '../../types'
 import Favicon from '../shared/Favicon.vue'
 
@@ -72,8 +73,7 @@ function collectAll(): void {
 }
 function purgeAll(): void {
   const ids = deadItems.value.map((x) => x.node.id)
-  docs.mutDelete(props.docId, ids)
-  ui.notify('success', `Purged ${ids.length} dead links`)
+  confirmDelete(props.docId, ids, { kind: 'success', text: `Purged ${ids.length} dead links` })
 }
 function restoreAll(): void {
   const ids = deadItems.value.map((x) => x.node.id)
@@ -197,7 +197,7 @@ function onKeydown(e: KeyboardEvent): void {
           <button class="icon-btn" title="Copy path" @click.stop="copyPath(x.node)"><component :is="icon('Clipboard')" :size="13" /></button>
           <button class="icon-btn" title="Show in tree" @click.stop="revealInTree(x.node)"><component :is="icon('ListTree')" :size="13" /></button>
           <button class="icon-btn" title="Mark alive" @click.stop="docs.mutClearDead(doc.id, x.node.id)"><component :is="icon('Eye')" :size="13" /></button>
-          <button class="icon-btn danger" title="Purge" @click.stop="docs.mutDelete(doc.id, [x.node.id])"><component :is="icon('Trash2')" :size="13" /></button>
+          <button class="icon-btn danger" title="Purge" @click.stop="confirmDelete(doc.id, [x.node.id])"><component :is="icon('Trash2')" :size="13" /></button>
         </span>
       </div>
     </div>

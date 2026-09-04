@@ -14,10 +14,15 @@ export const useUi = defineStore('ui', {
     modal: null as { kind: string; payload?: unknown } | null,
   }),
   actions: {
+    /**
+     * ttl === 0 → sticky: the toast stays until manually dismissed (the ✕ or
+     * the action button). Critical situations (external-change conflicts,
+     * partial Apply failures) use this; ordinary feedback keeps auto-dismissing.
+     */
     notify(kind: Toast['kind'], text: string, action?: Toast['action'], ttl = 3500): void {
       const id = uid()
       this.toasts.push({ id, kind, text, action })
-      setTimeout(() => this.dismiss(id), ttl)
+      if (ttl > 0) setTimeout(() => this.dismiss(id), ttl)
     },
     dismiss(id: string): void {
       this.toasts = this.toasts.filter((t) => t.id !== id)

@@ -47,6 +47,15 @@ it('deeper non-bar folders keep the section at the front', () => {
   ])
 })
 
+it('a real top-level folder named "Other bookmarks" is not doubled by the virtual section', () => {
+  const root: BmNode = { id: 'root', type: 'folder', name: '(root)', addDate: t, children: [folder('Other bookmarks', 'ob', [folder('X', 'x')])] }
+  expect(crumbPath(root, 'ob')).toEqual([{ id: 'ob', name: 'Other bookmarks' }])
+  expect(crumbPath(root, 'x')).toEqual([
+    { id: 'ob', name: 'Other bookmarks' },
+    { id: 'x', name: 'X' },
+  ])
+})
+
 it('a document without a toolbar folder wraps everything in "Other bookmarks"', () => {
   const root: BmNode = { id: 'root', type: 'folder', name: '(root)', addDate: t, children: [folder('Favs', 'favs', [folder('Mail', 'mail')])] }
   expect(crumbPath(root, 'favs')).toEqual([

@@ -88,7 +88,12 @@ export function crumbPath(root: BmNode, id: string): Crumb[] {
   const path = nodePath(root, id).map((n) => ({ id: n.id, name: n.name }))
   if (!path.length) return []
   const bar = toolbarFolder(root)
-  if (bar && path[0]!.id === bar.id) return path
+  const top = path[0]!
+  if (bar && top.id === bar.id) return path
+  // the virtual section label is "Other bookmarks" — don't prepend it over a
+  // real top-level folder that is already named "Other bookmarks" (that would
+  // render a redundant "Other bookmarks › Other bookmarks")
+  if (top.name === 'Other bookmarks') return path
   return [{ id: root.id, name: 'Other bookmarks' }, ...path]
 }
 

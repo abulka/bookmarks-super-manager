@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { findNode } from '../lib/tree'
 import { rewriteUrl } from '../lib/urlrewrite'
 import { useDocs } from './docs'
+import { isChromeExt } from '../lib/backend/chrome'
 import type { CheckResult } from '../workers/linkchecker'
 
 export interface CheckItem {
@@ -103,7 +104,7 @@ export const useChecker = defineStore('checker', {
           this.phase = 'finished'
         }
       }
-      w.postMessage({ type: 'run', urls, runId: this.runId })
+      w.postMessage({ type: 'run', urls, runId: this.runId, ext: isChromeExt() })
     },
 
     cancel(): void {

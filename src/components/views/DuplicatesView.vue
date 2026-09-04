@@ -5,6 +5,7 @@ import { useDocs } from '../../state/docs'
 import { useUi } from '../../state/ui'
 import { useIcon } from '../../lib/icons'
 import { findDuplicates } from '../../lib/tree'
+import { confirmDelete } from '../../lib/confirmDelete'
 import { formatDate } from '../../lib/date'
 import { hostOf, isPrivateHost } from '../../lib/url'
 import type { BmNode } from '../../types'
@@ -84,16 +85,14 @@ function keepNewest(g: (typeof groups.value)[number]): void {
   const newest = [...g.members].sort((a, b) => (b.node.addDate ?? 0) - (a.node.addDate ?? 0))[0]
   const removeIds = g.members.filter((m) => m.node.id !== newest.node.id).map((m) => m.node.id)
   if (removeIds.length) {
-    docs.mutDelete(d.id, removeIds)
-    ui.notify('success', `Removed ${removeIds.length} duplicate${removeIds.length === 1 ? '' : 's'}, kept newest`)
+    confirmDelete(d.id, removeIds, { kind: 'success', text: `Removed ${removeIds.length} duplicate${removeIds.length === 1 ? '' : 's'}, kept newest` })
   }
 }
 function deleteAll(g: (typeof groups.value)[number]): void {
   const d = doc.value
   if (!d) return
   const ids = g.members.map((m) => m.node.id)
-  docs.mutDelete(d.id, ids.slice(1))
-  ui.notify('info', `Removed ${ids.length - 1} duplicates (kept one per URL)`)
+  confirmDelete(d.id, ids.slice(1), { kind: 'info', text: `Removed ${ids.length - 1} duplicates (kept one per URL)` })
 }
 function revealPath(m: (typeof groups.value)[number]['members'][number]): void {
   docs.revealPath(props.docId, m.node.id)
@@ -141,8 +140,7 @@ function keepNewestAll(): void {
     const newest = [...g.members].sort((a, b) => (b.node.addDate ?? 0) - (a.node.addDate ?? 0))[0]
     for (const m of g.members) if (m.node.id !== newest.node.id) removeIds.push(m.node.id)
   }
-  docs.mutDelete(d.id, removeIds)
-  ui.notify('success', `Consolidated: removed ${removeIds.length} duplicate copies`)
+  confirmDelete(d.id, removeIds, { kind: 'success', text: `Consolidated: removed ${removeIds.length} duplicate copies` })
 }
 </script>
 

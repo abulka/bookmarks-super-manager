@@ -1,5 +1,6 @@
 import { useDnd, type DropMode, type DropTarget } from '../state/dnd'
 import { useDocs } from '../state/docs'
+import { indexTree } from './tree'
 import { initialOf } from './favicon'
 
 export interface DragBegin {
@@ -17,7 +18,6 @@ const EDGE = 56
 let active: {
   begin: DragBegin
   ghost: HTMLElement
-  lastRow: HTMLElement | null
 } | null = null
 let raf = 0
 let lastTargetKey = ''
@@ -111,7 +111,7 @@ export function prepareDrag(e: MouseEvent, begin: DragBegin, onDrop: (toFolderId
 
   function activate(_ev: MouseEvent): void {
     if (!useDocs().byId(begin.docId)) return
-    active = { begin, ghost: makeGhost(begin), lastRow: null }
+    active = { begin, ghost: makeGhost(begin) }
     document.body.classList.add('bm-dragging')
     dnd().start({
       docId: begin.docId,
@@ -133,19 +133,16 @@ function scheduleUpdate(ev: MouseEvent): void {
 function updateDrag(ev: MouseEvent): void {
   if (!active) return
   active.ghost.style.transform = `translate(${ev.clientX + 12}px, ${ev.clientY + 14}px)`
-  const d = dnd()
 
   const hit = document.elementFromPoint(ev.clientX, ev.clientY)
   const row = hit?.closest?.('[data-dropid]') as HTMLElement | null
   if (!row) {
-    d.setTarget(null)
-    active.lastRow = null
+    clearTarget()
     return
   }
   const id = row.getAttribute('data-dropid') || ''
   if (!id || active.begin.nodeIds.includes(id)) {
-    d.setTarget(null)
-    active.lastRow = null
+    clearTarget()
     return
   }
   const parentId = row.getAttribute('data-dropparent') || ''
@@ -153,14 +150,34 @@ function updateDrag(ev: MouseEvent): void {
   const rect = row.getBoundingClientRect()
   const pct = (ev.clientY - rect.top) / rect.height
   let mode: DropMode
+  let anchorRow: HTMLElement | null
   // the root ("All bookmarks") row is an inside-only target: there is no
   // parent level above it to anchor before/after against
-  if (kind === 'root') mode = 'inside'
-  else if (kind === 'folder') mode = pct < 0.3 ? 'before' : pct > 0.7 ? 'after' : 'inside'
-  else mode = pct < 0.5 ? 'before' : 'after'
-  const anchorId = mode === 'inside' ? null : id
-  active.lastRow = row
-  setTargetSoon({ folderId: id, anchorId, mode, parentId })
+  if (kind === 'root') {
+    mode = 'inside'
+    anchorRow = null
+  } else if (kind === 'folder' && pct >= 0.3 && pct <= 0.7) {
+    mode = 'inside'
+    anchorRow = null
+  } else if (kind === 'folder' ? pct < 0.3 : pct < 0.5) {
+    mode = 'before'
+    anchorRow = row
+  } else {
+    ;({ mode, anchorRow } = gapBelow(row, parentId))
+  }
+  // never hint at a drop that would change nothing: dropping back into the
+  // source folder, or at a gap the selection already occupies, is a silent
+  // no-op — showing a target there promises an effect that never happens
+  if (mode === 'inside' && id === active.begin.sourceParentId) {
+    clearTarget()
+    return
+  }
+  if (mode === 'before' && anchorRow && gapAtCurrentSpot(anchorRow, parentId, active.begin.nodeIds)) {
+    clearTarget()
+    return
+  }
+  const anchorId = anchorRow?.getAttribute('data-dropid') ?? null
+  setTargetSoon({ folderId: anchorId ?? id, anchorId, mode, parentId })
 
   const scroller = (hit as Element | null)?.closest('.cl-scroll, .tree-scroll') as HTMLElement | null
   if (scroller) {
@@ -177,6 +194,60 @@ function setTargetSoon(t: DropTarget): void {
   dnd().setTarget(t)
 }
 
+/** Clear the hover target and forget the dedup key so the next target applies. */
+function clearTarget(): void {
+  lastTargetKey = ''
+  dnd().setTarget(null)
+}
+
+/**
+ * The gap below a row is a single insertion point, so express it as 'before'
+ * the next visible sibling (same data-dropparent) — "below A" and "above B"
+ * become one target instead of two. Only the parent's last child keeps
+ * 'after', which means append at the end of its parent folder.
+ */
+function gapBelow(row: HTMLElement, parentId: string): { mode: DropMode; anchorRow: HTMLElement | null } {
+  let el: Element | null = row
+  while ((el = el.nextElementSibling)) {
+    if (!el.getAttribute('data-dropid')) continue
+    // flattened tree rows: anything in between belongs to the row's own
+    // subtree (different data-dropparent), so the first row sharing the
+    // parent is exactly the next sibling
+    if (el.getAttribute('data-dropparent') === parentId) return { mode: 'before', anchorRow: el as HTMLElement }
+  }
+  return { mode: 'after', anchorRow: null }
+}
+
+/**
+ * True when dropping at the gap just above `anchorRow` would leave the dragged
+ * selection exactly where it already is (so the gap is adjacent to it and the
+ * drop is a silent no-op). Requires every dragged id to live in this parent —
+ * a multi-folder selection always has something meaningful to move.
+ */
+function gapAtCurrentSpot(anchorRow: HTMLElement, parentId: string, dragged: string[]): boolean {
+  const anchorId = anchorRow.getAttribute('data-dropid')
+  if (!anchorId) return false
+  // only same-parent selections can land a no-op gap; a multi-folder selection
+  // always has something meaningful to move
+  for (const id of dragged) {
+    const r = document.querySelector(`[data-dropid="${id}"]`)
+    if (!r || r.getAttribute('data-dropparent') !== parentId) return false
+  }
+  const draggedSet = new Set(dragged)
+  // gap directly above a dragged row: the drop would re-drop the item on itself
+  if (draggedSet.has(anchorId)) return true
+  // walk up over consecutive dragged siblings; the block must be the selection
+  let el: Element | null = anchorRow
+  let covered = 0
+  while ((el = el.previousElementSibling)) {
+    if (el.getAttribute('data-dropparent') !== parentId) continue // subtree rows of preceding siblings
+    const id = el.getAttribute('data-dropid')
+    if (!id || !draggedSet.has(id)) break
+    covered++
+  }
+  return covered === draggedSet.size
+}
+
 function finish(_ev: MouseEvent, onDrop: (toFolderId: string, anchorId: string | null) => void): void {
   const d = dnd()
   const t = d.target
@@ -190,8 +261,12 @@ function finish(_ev: MouseEvent, onDrop: (toFolderId: string, anchorId: string |
     toFolder = t.folderId
     anchor = null
   } else {
-    toFolder = t.parentId || t.folderId
-    anchor = t.mode === 'before' ? t.folderId : nextSiblingId(active.lastRow)
+    // 'before' anchors on the row below the gap; 'after' appends at the end —
+    // both land in the hovered row's parent folder. Never treat the anchor id
+    // (a sibling row, not a folder) as the destination; an unresolvable parent
+    // means the row was stale — ignore the drop instead of mis-filing it.
+    toFolder = t.parentId || parentFolderOf(begin.docId, t.folderId)
+    anchor = t.mode === 'before' ? t.folderId : null
   }
   // dropping back into the same folder at the end is a no-op
   if (toFolder === begin.sourceParentId && t.mode === 'inside' && t.folderId === begin.sourceParentId) {
@@ -201,12 +276,11 @@ function finish(_ev: MouseEvent, onDrop: (toFolderId: string, anchorId: string |
   onDrop(toFolder, anchor)
 }
 
-function nextSiblingId(row: HTMLElement | null): string | null {
-  let el: Element | null = row
-  while (el && (el = el.nextElementSibling)) {
-    if (el.getAttribute('data-dropid')) return el.getAttribute('data-dropid')
-  }
-  return null
+/** Real parent folder of a node id in the doc's tree ('' when unknown). */
+function parentFolderOf(docId: string, id: string): string {
+  const doc = useDocs().byId(docId)
+  if (!doc) return ''
+  return indexTree(doc.root).parentOf.get(id)?.id ?? ''
 }
 
 function deactivate(): void {

@@ -483,11 +483,22 @@
     linear-gradient(var(--bg), var(--bg)) no-repeat,
     var(--surface);
 }
-.tree-row.drophover[data-drophover='before'] {
-  box-shadow: inset 0 2px 0 var(--accent);
+/* straight insertion line across the row edge — box-shadow would follow the
+   row's rounded corners and curve at the ends */
+.tree-row.drophover[data-drophover='before']::after,
+.tree-row.drophover[data-drophover='after']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
 }
-.tree-row.drophover[data-drophover='after'] {
-  box-shadow: inset 0 -2px 0 var(--accent);
+.tree-row.drophover[data-drophover='before']::after {
+  top: 0;
+}
+.tree-row.drophover[data-drophover='after']::after {
+  bottom: 0;
 }
 
 .tree-section {
@@ -621,11 +632,20 @@
   background: var(--accent-softer);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
-.bm-row.drophover[data-drophover='before'] {
-  box-shadow: inset 0 2px 0 var(--accent);
+.bm-row.drophover[data-drophover='before']::after,
+.bm-row.drophover[data-drophover='after']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
 }
-.bm-row.drophover[data-drophover='after'] {
-  box-shadow: inset 0 -2px 0 var(--accent);
+.bm-row.drophover[data-drophover='before']::after {
+  top: 0;
+}
+.bm-row.drophover[data-drophover='after']::after {
+  bottom: 0;
 }
 .bm-row .favicon {
   flex: none;
